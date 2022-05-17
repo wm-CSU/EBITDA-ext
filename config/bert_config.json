@@ -1,0 +1,28 @@
+{
+  "model_type": "bert",
+  "max_seq_len": 200,
+  "model_path": "model/bert-base-uncased/",
+  "last_model_path": "model/bert-base-uncased/",
+  "log_path": "log/",
+
+  "train_file_path": "data/train.csv",
+  "valid_file_path": "data/valid.csv",
+
+  "batch_size": 64,
+  "multi_gpu": false,
+  "use_whitening": false,
+
+  "bert_model_path": "../transformers_PTM/bert-base-uncased/",
+  "pooling": "first-last-avg",
+  "hidden_size": 768,
+  "num_classes": 20,
+  "dropout": 0.01,
+
+  "lr": 3e-5,
+  "num_epoch": 100,
+  "warmup_ratio": 0.1,
+  "gradient_accumulation_steps": 1,
+  "max_grad_norm": 1e-3,
+
+  "experiment_name": "BERT-fine_tune-data1"
+}
