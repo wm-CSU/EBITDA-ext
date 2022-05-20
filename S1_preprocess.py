@@ -24,19 +24,31 @@ def Drop_Redundance(data,
             data.rename(columns={data.columns[i]: data.columns[i - 1] + '_sentence'}, inplace=True)
         if 'keyword' in data.columns[i]:
             data.rename(columns={data.columns[i]: data.columns[i - 2] + '_keywords'}, inplace=True)
-    # 删除汇总列和无用列，避免影响句子分类
-    drop_name = ['exclude_nonrec', 'exclude_nonrec_sentence', 'exclude_nonrec_keywords',
-                 'exclude_nonrec_loss', 'exclude_nonrec_loss_sentence', 'exclude_nonrec_loss_keywords',
-                 'exclude_nonrec_gain', 'exclude_nonrec_gain_sentence', 'exclude_nonrec_gain_keywords',
-                 'other_nonrec_loss', 'other_nonrec_loss_sentence', 'other_nonrec_loss_keywords',
-                 'other_nonrec_gain', 'other_nonrec_gain_sentence', 'other_nonrec_gain_keywords',
-                 'secdate', 'secexhib', 'secform', 'ticker', 'facid', 'packageid',
-                 'fcovenant_c', 'company', 'maturity', 'loantype', 'facilityamt', 'bcoid',
-                 'primarypurpose', 'secured', 'collateral', 'performance', 'rating', 'conm',
-                 'title', 'url', '备注']
-    data = data.drop(drop_name, axis=1)
+    # 保留有用列
+    use_col = ['file_name',
+        'asset_writedown', 'asset_writedown_sentence',
+        'asset_disp_loss', 'asset_disp_loss_sentence',
+        'restruct_exp', 'restruct_exp_sentence',
+        'liti_settelment_loss', 'liti_settelment_loss_sentence',
+        'goodwill_impairment', 'goodwill_impairment_sentence',
+        'acquisition_charge', 'acquisition_charge_sentence',
+        'debt_extinguish_loss', 'debt_extinguish_loss_sentence',
+        'disconti_loss', 'disconti_loss_sentence',
+        'relocation_exp', 'relocation_exp_sentence',
+        'in_process_rnd_charge', 'in_process_rnd_charge_sentence',
+        'acct_change_loss', 'acct_change_loss_sentence',
+        'asset_disp_gain', 'asset_disp_gain_sentence',
+        'asset_writeup', 'asset_writeup_sentence',
+        'insur_proceed_gain', 'insur_proceed_gain_sentence',
+        'restruct_inc', 'restruct_inc_sentence',
+        'disconti_gain', 'disconti_gain_sentence',
+        'debt_extinguish_gain', 'debt_extinguish_gain_sentence',
+        'liti_settelment_gain', 'liti_settelment_gain_sentence',
+        'acct_change_gain', 'acct_change_gain_sentence',
+    ]
+    data = data[use_col]
     # 未标注数据删除
-    data.dropna(axis=0, thresh=19, inplace=True)  # 57/3=19 至少应有24个元素非空
+    data.dropna(axis=0, thresh=19, inplace=True)  # 57/3=19 至少应有19个元素非空
     # 重复数据删除(默认保留第一条)
     data.dropna(axis=0, subset=['file_name'], inplace=True)
     data.drop_duplicates(subset=['file_name'], inplace=True)
@@ -49,14 +61,27 @@ def Drop_Redundance(data,
 def batch_move(data, ori_path, new_path):
     for index, row in data.iterrows():
         ori_file = os.path.join(ori_path, index.split('_')[0], 'txt', index + '.txt')
-        print(ori_file)
+        # print(ori_file)
         move_txt(ori_file, new_path)
 
     return
 
 
 if __name__ == '__main__':
-    ori_data = read_annotation(filename=r'data/matchtxt.xlsx', sheet_name='Sheet1')
-    data = Drop_Redundance(ori_data)
-    data.to_csv('data/new.csv')
-    batch_move(data, 'data/ori_txt', 'data/txt_set')
+    #
+    # ori_data = read_annotation(filename=r'data/batch_one.xlsx', sheet_name='Sheet1')
+    # data = Drop_Redundance(ori_data, 'data/new.xlsx')
+    # batch_move(data, 'data/ori_txt', 'data/txt_set')
+    #
+    # # 第二批数据处理
+    # ori_data2 = read_annotation(filename=r'data/batch_two.xlsx', sheet_name='Sheet1')
+    # data2 = Drop_Redundance(ori_data2, 'data/new2.xlsx')
+    # batch_move(data2, 'data/ori_txt', 'data/txt_set')
+    #
+    # import pandas as pd
+    # merge_data = pd.concat([data, data2])
+    # merge_data.to_excel('data/merge_data.xlsx')
+
+    # 测试数据处理
+    ori_data = read_annotation(filename=r'data/test.xlsx', sheet_name='Sheet1')
+    batch_move(ori_data, 'data/ori_txt', r'data/test_txt_set')

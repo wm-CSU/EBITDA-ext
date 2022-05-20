@@ -65,29 +65,32 @@ def eval_file(golds_file, predicts_file):
     return calculate_accuracy_f1(golds, predicts)
 
 
-def evaluate(model, data_loader, device) -> List[str]:
+def evaluate(tokenizer, model, data_loader, device) -> List[str]:
     """Evaluate model on data loader in device.
 
     Args:
+        tokenizer: to decode sentence
         model: model to be evaluate
         data_loader: torch.utils.data.DataLoader
         device: cuda or cpu
 
     Returns:
-        answer list
+        answer list, sent_list
     """
     model.eval()
     # outputs = torch.tensor([], dtype=torch.float).to(device)
-    answer_list = []
+    answer_list, sent_list = [], []
     # for batch in tqdm(data_loader, desc='Evaluation', ascii=True, ncols=80, leave=True, total=len(data_loader)):
-    for _, batch in enumerate(data_loader):
-        batch = tuple(t.to(device) for t in batch)
+    for _, data in enumerate(data_loader):
+        batch = tuple(t.to(device) for t in data)
         with torch.no_grad():
             logits, _ = model(*batch)
         # outputs = torch.cat([outputs, torch.argmax(logits, dim=1)])
+        # sent_list.extend(tokenizer.decode_batch(data[0], skip_special_tokens=True))
+        sent_list.extend([tokenizer.decode(x, skip_special_tokens=True) for x in batch[0]])
         answer_list.extend(torch.argmax(logits, dim=1).detach().cpu().numpy().tolist())
 
-    return [str(x) for x in answer_list]
+    return [str(x) for x in answer_list], sent_list
 
 
 def evaluate_main(golden_file='data/task1.2-test-labels.csv', predict_file='result/bert-test1.csv'):

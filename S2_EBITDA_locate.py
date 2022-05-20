@@ -150,8 +150,11 @@ class pdf_Paragraph_Extract:
 
 
 class Paragraph_Extract:
-    def __init__(self, ori_data):
-        self.data = Drop_Redundance(ori_data)  # 原生数据预处理（冗余删除）
+    def __init__(self, ori_data, Train: bool=True):
+        if Train:
+            self.data = Drop_Redundance(ori_data)  # 原生数据预处理（冗余删除）
+        else:
+            self.data = ori_data
 
     def deal(self, input_path, output_path):
         get_path(output_path)
@@ -287,37 +290,18 @@ class Paragraph_Extract:
 
 
 if __name__ == '__main__':
-    ori_data = read_annotation(filename=r'data/matchtxt.xlsx', sheet_name='Sheet1')
+    ori_data = read_annotation(filename=r'data/test.xlsx', sheet_name='Sheet1')
     # ext = pdf_Paragraph_Extract(ori_data)
     # import pdfplumber
     # pdf = pdfplumber.open('data/陈炫衣agreement/165052_20110329.pdf')
     # ext.goal_locate(pdf, r'data/txt/165052_20110329.txt')
     # all pdf deal time: 5391.349329710007 s
-    ext = Paragraph_Extract(ori_data)
+    ext = Paragraph_Extract(ori_data, Train=False)
     start = time.time()
-    ext.deal(input_path=r'data/txt_set/', output_path=r'data/adjust_txt/',
-             excel_path=r'data/new.xlsx', sheet_name='Sheet1')
+    ext.deal(input_path=r'data/test_txt_set/', output_path=r'data/test_adjust_txt/')
     end = time.time()
-    print('time: {} s'.format(end - start))  # time: 38.088237047195435 s
-    # test = '“Agent Engagement Letter” means that certain Engagement Letter dated May 29, ' \
-    #        '2013 by and between the Borrower and the Agent.“Agent Fees” has the meaning assigned to such term in ' \
-    #        'Section 2.10(b).“Agent Parties” has the meaning assigned to such term in Section 9.01.' \
-    #        '“Aggregate Revolving Credit Exposure” means the aggregate amount of the Lenders Revolving Credit ' \
-    #        'Exposures.“Alternate Base Rate” means, for any day, a rate per annum equal to the greater of (a) ' \
-    #        'the Prime Rate in effect on such day, (b) the Federal Funds Effective Rate in effect on such day ' \
-    #        'plus ½ of 1%, and (c) the LIBO Rate for a period of one month commencing on such day (which rate shall ' \
-    #        'in no event be less than zero) plus 1%.  If the Agent shall have reasonably determined (which ' \
-    #        'determination shall be conclusive absent manifest error) that it is unable to ascertain the Federal ' \
-    #        'Funds Effective Rate for any reason, including the inability or failure of the Agent to obtain ' \
-    #        'sufficient quotations in accordance with the terms of the definition of Federal Funds Effective Rate, ' \
-    #        'the Alternate Base Rate shall be determined without regard to clause (b) of the preceding sentence ' \
-    #        'until the circumstances giving rise to such inability no longer exist.  Any change in the Alternate ' \
-    #        'Base Rate due to a change in the Prime Rate or the Federal Funds Effective Rate shall be effective ' \
-    #        'from and including the effective date of such change in the Prime Rate or the Federal Funds ' \
-    #        'Effective Rate, respectively.'
-    # bounds = re.compile(r'(\D+\.)$')
-    # # bounds = re.compile(r'^“[\s\S]+”[\s\S]+(?:mean|:)[\s\S]+(\D+\.)$')
-    # # r'^“.*?”.*?(mean|:).*?(\D\.)$'
-    # res = bounds.split(test)
-    # print(res)
+    print('time: {} s'.format(end - start))
+    # time: 38.088237047195435 s (only batch one);  time: 79.5703809261322 s (all data);
+    # time: 24.32954716682434 s(test_set)
+
     pass

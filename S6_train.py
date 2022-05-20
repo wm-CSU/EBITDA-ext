@@ -25,7 +25,6 @@ from types import SimpleNamespace
 
 import torch
 from torch import nn
-from torch.optim import Adam
 from torch.utils.data import DataLoader
 # from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm, trange
@@ -34,7 +33,7 @@ from transformers.optimization import (
 
 from S4_dataset import Data
 from S5_model import BertForClassification
-from S7_evaluate import evaluate, calculate_accuracy_f1, get_labels_from_file
+from S7_evaluate import evaluate, calculate_accuracy_f1
 
 from utils import get_csv_logger, get_path, load_torch_model
 from tools.pytorchtools import EarlyStopping
@@ -47,7 +46,6 @@ class Trainer:
 
     def __init__(self,
                  model, data_loader: Dict[str, DataLoader],
-                 # train_labels, valid_labels,
                  device, config):
         """Initialize trainer with model, data, device, and config.
         Initialize optimizer, scheduler, criterion.
@@ -83,22 +81,22 @@ class Trainer:
             optimizer
         """
         # # no_decay = ['bias', 'gamma', 'beta']
-        # no_decay = ['bias', 'LayerNorm.weight']
-        # # optimizer_parameters = [
-        # #     {'params': [p for n, p in self.model.named_parameters()
-        # #                 if not any(nd in n for nd in no_decay) and p.requires_grad],
-        # #      'weight_decay_rate': 0.01},
-        # #     {'params': [p for n, p in self.model.named_parameters()
-        # #                 if any(nd in n for nd in no_decay) and p.requires_grad],
-        # #      'weight_decay_rate': 0.0}]
+        no_decay = ['bias', 'LayerNorm.weight']
+        optimizer_parameters = [
+            {'params': [p for n, p in self.model.named_parameters()
+                        if not any(nd in n for nd in no_decay)],
+             'weight_decay_rate': 0.01},
+            {'params': [p for n, p in self.model.named_parameters()
+                        if any(nd in n for nd in no_decay)],
+             'weight_decay_rate': 0.0}]
         # optimizer_parameters = [
         #     {'params': [p for p in self.model.parameters() if p.requires_grad],
         #      'weight_decay_rate': 0.01}
         # ]
         optimizer = AdamW(
             # [p for p in self.model.parameters() if p.requires_grad],
-            # optimizer_parameters,
-            filter(lambda p: p.requires_grad, self.model.parameters()),
+            optimizer_parameters,
+            # filter(lambda p: p.requires_grad, self.model.parameters()),
             # self.model.parameters(),
             lr=self.config.lr,
             betas=(0.9, 0.999),
@@ -138,26 +136,6 @@ class Trainer:
 
         return [str(x) for x in answer_list], [str(x) for x in labels]
 
-    # def _evaluate_for_train_valid(self):
-    #     """Evaluate model on train and valid set and get acc and f1 score.
-    #
-    #     Returns:
-    #         train_acc, train_f1, valid_acc, valid_f1
-    #     """
-    #     train_predictions = self.evaluate(data_loader=self.data_loader['valid_train'])
-    #     # valid_predictions = evaluate(
-    #     #     model=self.model, data_loader=self.data_loader['valid_valid'],
-    #     #     device=self.device)
-    #     # train_answers = get_labels_from_file(self.config.train_file_path)
-    #     # valid_answers = get_labels_from_file(self.config.valid_file_path)
-    #     train_acc, train_f1 = calculate_accuracy_f1(
-    #         [str(x) for x in self.train_labels], train_predictions)
-    #     # valid_acc, valid_f1 = calculate_accuracy_f1(
-    #     #     [str(x) for x in self.valid_labels], valid_predictions)
-    #     valid_acc, valid_f1 = train_acc, train_f1
-    #
-    #     return train_acc, train_f1, valid_acc, valid_f1
-
     def _epoch_evaluate_update_description_log(
             self, tqdm_obj, logger, epoch):
         """Evaluate model and update logs for epoch.
@@ -170,29 +148,18 @@ class Trainer:
         Return:
             train_acc, train_f1, valid_acc, valid_f1
         """
-        # 原_evaluate_for_train_valid()内容
+        # Evaluate model for train and valid set
         predictions, labels = self._evaluate(data_loader=self.data_loader['train'])
         train_acc, train_f1 = calculate_accuracy_f1(labels, predictions)
-        # valid_predictions = evaluate(
-        #     model=self.model, data_loader=self.data_loader['valid_valid'],
-        #     device=self.device)
-        # valid_answers = get_labels_from_file(self.config.valid_file_path)
-        # valid_acc, valid_f1 = calculate_accuracy_f1(
-        #     [str(x) for x in self.valid_labels], valid_predictions)
         valid_predictions, valid_labels = self._evaluate(data_loader=self.data_loader['valid_train'])
         valid_acc, valid_f1 = calculate_accuracy_f1(valid_labels, valid_predictions)
-        results = train_acc, train_f1, valid_acc, valid_f1
-
-        # Evaluate model for train and valid set
-        # results = self._evaluate_for_train_valid()
-        # train_acc, train_f1, valid_acc, valid_f1 = results
         # Update tqdm description for command line
         tqdm_obj.set_description(
             'Epoch: {:d}, train_acc: {:.6f}, train_f1: {:.6f}, '
             'valid_acc: {:.6f}, valid_f1: {:.6f}, '.format(
                 epoch, train_acc, train_f1, valid_acc, valid_f1))
         # Logging
-        logger.info(','.join([str(epoch)] + [str(s) for s in results]))
+        logger.info(','.join([str(epoch)] + [str(train_acc), str(train_f1), str(valid_acc), str(valid_f1)]))
         return train_acc, train_f1, valid_acc, valid_f1
 
     def save_model(self, filename):
@@ -221,7 +188,6 @@ class Trainer:
             log_format='%(asctime)s - %(name)s - %(message)s'
         )
 
-        epoch_logger.info("--------------------loading model and optimizer...-------------------\n")
         if ReTrain:  # 读入最新模型
             temporary = self.load_last_model(model=self.model,
                                              model_path=os.path.join(self.config.model_path,
@@ -232,8 +198,8 @@ class Trainer:
             self.model, self.optimizer, start_epoch, self.best_f1 = temporary
             self.scheduler.last_epoch = start_epoch
             self.steps_left = (self.config.num_epoch - start_epoch) * len(self.data_loader['train'])
-            # self.config.num_training_steps = config.num_epoch * (len(data_loader['train']) // config.batch_size)
         else:
+            epoch_logger.info("--------------------training model...-------------------\n")
             self.steps_left = self.config.num_epoch * len(self.data_loader['train'])
             self.best_f1 = 0
             start_epoch = 0
@@ -242,7 +208,6 @@ class Trainer:
         if self.config.multi_gpu:
             self.model = torch.nn.DataParallel(self.model)
 
-        epoch_logger.info("--------------------training model...-------------------\n")
         best_model_state_dict = None
         progress_bar = trange(self.config.num_epoch - start_epoch, desc='Epoch', ncols=160)
         self.earlystop = EarlyStopping(patience=5, verbose=True)
@@ -258,8 +223,14 @@ class Trainer:
                     for step, batch in enumerate(tqdm_obj):
                         batch = tuple(t.to(self.device) for t in batch)
                         logits, _ = self.model(*batch[:-1])  # the last one is label
+                        # origin
                         # pred = torch.argmax(logits, dim=1).long()
                         loss = self.criterion(logits, batch[-1])
+                        # # try multi-class
+                        # predictions = nn.Sigmoid()(logits)
+                        # # loss = nn.BCEWithLogitsLoss()(predictions, true_labels.to(self.device).float())
+                        # loss = nn.BCELoss()(predictions, batch[-1])
+
                         train_loss_sum += loss.item()
                         if self.config.gradient_accumulation_steps > 1:  # 多次叠加
                             loss = loss / self.config.gradient_accumulation_steps
@@ -271,8 +242,6 @@ class Trainer:
                             self.optimizer.step()
                             self.scheduler.step()
                             self.optimizer.zero_grad()
-                            # self.steps_left -= 1
-                            # tqdm_obj.set_description('loss: {:.6f}'.format(loss.item()))
                             step_logger.info(str(self.steps_left) + ',' + str(loss.item()))
                         tqdm_obj.update(1)
             except KeyboardInterrupt:
@@ -355,11 +324,11 @@ def main(config_file='config/bert_config.json'):
                 max_seq_len=config.max_seq_len,
                 model_type=config.model_type)
     datasets = data.load_train_and_valid_files(
-        train_file='data/matchtxt.xlsx', train_sheet='Sheet1', train_txt='data/sent_label/',
-        valid_file='data/matchtxt.xlsx', valid_sheet='Sheet1', valid_txt='data/sent_label/',
+        train_file='data/merge_data.xlsx', train_sheet='Sheet1', train_txt='data/sent_label/',
+        valid_file='data/merge_data.xlsx', valid_sheet='Sheet1', valid_txt='data/adjust_txt/',
     )
-    # train_set, train_labels, valid_set_train, valid_labels, valid_set_valid = datasets
     train_set, valid_set_train, valid_set_valid = datasets
+
     if torch.cuda.is_available():
         device = torch.device('cuda:0')
         print('cuda is available!')
@@ -393,7 +362,7 @@ def main(config_file='config/bert_config.json'):
     trainer = Trainer(model=model, data_loader=data_loader,
                       # train_labels=train_labels, valid_labels=valid_labels,
                       device=device, config=config)
-    best_model_state_dict = trainer.train(ReTrain=True)
+    best_model_state_dict = trainer.train(ReTrain=False)
     # 4. Save model
     torch.save(best_model_state_dict,
                os.path.join(config.model_path, 'model.bin'))
@@ -407,7 +376,6 @@ def main(config_file='config/bert_config.json'):
                                           trainer.config.model_type + '-best_model.bin'),
                              False)
     valid_predictions = evaluate(model, data_loader['valid_valid'], device)
-    # print(train_labels)
     print(valid_predictions)
     # train_acc, train_f1 = calculate_accuracy_f1(
     #     [str(x) for x in train_labels], train_predictions)

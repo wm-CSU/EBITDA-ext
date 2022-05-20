@@ -9,75 +9,57 @@ from utils import read_annotation
 
 
 class Predict_postprocess:
-    def __init__(self):
-        self.LABELS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17',
-                       '18', '19']
+    def __init__(self, test_file='data/test.xlsx',
+                 test_sheet='Sheet1',
+                 test_txt='data/test_adjust_txt/'
+                 ):
         self.label_map = self._get_label_map()
-
+        self.data = read_annotation(filename=test_file, sheet_name=test_sheet)
+        self.data_preprocess()
+        self.para_list = self._get_test_set(test_txt=test_txt)
         pass
 
-    def deal(self, predictions,
-             test_file='data/test.xlsx', test_sheet='Sheet1', test_txt='data/test_adjust_txt/',
+    def deal(self, sent_list, predictions,
              to_file='data/predict.xlsx', to_sheet='Sheet1'
              ):
-        sent_list = self.get_test_set(test_file=test_file, test_sheet=test_sheet, test_txt=test_txt)
-        sent_label_pair = self.sent_label_align(sent_list, predictions=predictions)
-        self.predict2excel(sent_label_pair, to_file=to_file, to_sheet=to_sheet)
-
+        self.sent_data_align(sent_list, predictions=predictions)
+        self.data.to_excel(to_file, to_sheet)
         return
 
-    def get_test_set(self, test_file='data/test.xlsx',
-                     test_sheet='Sheet1',
-                     test_txt='data/test_adjust_txt/'):
+    def data_preprocess(self):
+        self.data.fillna('', inplace=True)
+        for k, v in self.label_map.items():
+            self.data[k.replace('_sentence', '')] = 0
+        return
+
+    def _get_test_set(self, test_txt='data/test_adjust_txt/'):
         """to get sentence list.
         :param test_file:
         :param test_sheet:
         :param test_txt:
         :return:
-            sent_list: [[sent1, sent2]]
+            para_list: [[para1, para2]]
         """
-        from S3_sentence_division import Division
-        ori_data = read_annotation(filename=test_file, sheet_name=test_sheet)
-        division = Division(ori_data)
-        self.data = division.data
-
-        sent_list = []
-        for index, one in division.data.iterrows():
+        para_list = []
+        for index, one in self.data.iterrows():
             filename = os.path.join(test_txt, index + '.txt')
-            sentences = division.txt2sent(filename=filename)
-            sent_list.append(sentences)
+            with open(filename, 'r', encoding='utf8') as f:
+                paragraph = f.read()
+            f.close()
+            para_list.append(paragraph)
 
-        return sent_list
+        return para_list
 
-    def sent_label_align(self, sent_list, predictions):
-        sent_label_pair = []
-        index = 0
-        for one_data in sent_list:
-            one_pair = {}
-            for sent in one_data:
-                one_pair[sent] = predictions[index]
-                index += 1
-            sent_label_pair.append(one_pair)
-
-        return sent_label_pair
-
-    def predict2excel(self, sent_label_pair, to_file='data/predict.xlsx', to_sheet='Sheet1'):
-        """change predict to excel.
-        :param sent_label_pair: [{sent: class, }]
-        :param to_file:
-        :param to_sheet:
-        :return:
-        """
-        for _, one, sent_label in zip(self.data.iterrows(), sent_label_pair):
-            for sent, label in sent_label.items():
-                if label == '0':
-                    continue
+    def sent_data_align(self, sent_list, predictions, ):
+        for (index, _), para in zip(self.data.iterrows(), self.para_list):
+            for sent, pred in zip(sent_list, predictions):
+                if pred != '0' and sent in para:
+                    label = [k for k, v in self.label_map.items() if str(v) == pred]
+                    self.data.loc[index, label[0].replace('_sentence', '')] = 1
+                    self.data.loc[index, label[0]] = ' '.join([self.data.loc[index, label[0]], sent])
                 else:
-                    column = [k for k, v in self.label_map.items() if str(v) == label]
-                    one[column[0]] += sent
-        self.data.to_excel(to_file, to_sheet)
-
-        return
+                    continue
+        return self.data
 
     def _get_label_map(self, filename: str = r'data/label_map.json'):
         with open(filename, 'r') as f:
@@ -87,9 +69,3 @@ class Predict_postprocess:
         return label_map
 
 
-if __name__ == '__main__':
-    pred = Predict_postprocess()
-    sent_list = pred.get_test_set(test_file='data/test.xlsx', test_sheet='Sheet1', test_txt='data/test_adjust_txt/')
-    sent_label_pair = pred.sent_label_align(sent_list, predictions=__Pred)
-    pred.predict2excel(sent_label_pair, to_file='data/predict.xlsx', to_sheet='Sheet1')
-    pass

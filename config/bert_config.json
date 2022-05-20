@@ -8,7 +8,7 @@
   "train_file_path": "data/train.csv",
   "valid_file_path": "data/valid.csv",
 
-  "batch_size": 64,
+  "batch_size": 32,
   "multi_gpu": false,
   "use_whitening": false,
 

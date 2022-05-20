@@ -22,7 +22,7 @@ from torch.utils.data import TensorDataset
 from torch.utils.data import random_split
 from transformers import BertTokenizer
 from tqdm import tqdm
-from tools.S0_xlsx_and_pdf_read import read_annotation
+from utils import read_annotation
 from S3_sentence_division import Division
 
 
@@ -72,21 +72,26 @@ class Data:
                 torch.utils.data.TensorDataset
                     each record: (input_ids, input_mask, segment_ids, label)
             Test:
-                torch.utils.data.TensorDataset
+                [torch.utils.data.TensorDataset]
                     each record: (input_ids, input_mask, segment_ids)
         """
         ori_data = read_annotation(filename=filename, sheet_name=sheet_name)
-        division = Division(ori_data)
         sent_list, label_list = [], []
         if train == 'test':
+            division = Division(ori_data, Train=False)
+            # dataset = []
             for index, one in division.data.iterrows():
+                # sent_list = []
                 filename = os.path.join(txt_path, index + '.txt')
                 sentences = division.txt2sent(filename=filename)
                 for sent in sentences:
                     sent_list.append(self.tokenizer.tokenize(sent))
 
+                # dataset.append(self._convert_sentence_to_bert_dataset(sent_list, label_list))
             dataset = self._convert_sentence_to_bert_dataset(sent_list, label_list)
+
         else:
+            division = Division(ori_data)
             for index, one in division.data.iterrows():
                 filename = os.path.join(txt_path, index + '.txt')
                 f = open(filename, 'r', encoding='utf8')

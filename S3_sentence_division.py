@@ -13,14 +13,11 @@ from S2_EBITDA_locate import Paragraph_Extract
 
 
 class Division:
-    def __init__(self, data):
-        self.data = Drop_Redundance(data)
-
-    # def previous_deal(self, txtset_path: str = r'data/txt_set/',
-    #                   ebitda_txt_path: str = r'data/adjust_txt/'):
-    #     ext = Paragraph_Extract(self.ori_data)
-    #     self.data = ext.deal(input_path=txtset_path, output_path=ebitda_txt_path)
-    #     return self.data
+    def __init__(self, data, Train: bool = True):
+        if Train:
+            self.data = Drop_Redundance(data)  # 原生数据预处理（冗余删除）
+        else:
+            self.data = data
 
     def deal(self, label_map, txtfilepath, labelfilepath):
         # 处理整个数据集
@@ -54,7 +51,14 @@ class Division:
 
     def sent_split(self, paragraph):
         # 段落划分为句子并除去过短元素（如单数字或空格）
-        para2sent = re.split(';|\.|\([\s\S]{1,3}\)', paragraph.strip())
+        para2sent = re.split(';|\.|\([\s\S]{1,4}\)', paragraph.strip())
+        # 保留分割符号，置于句尾，比如标点符号
+        seg_word = re.findall(';|\.|\([\s\S]{1,4}\)', paragraph.strip())
+        seg_word.extend(" ")  # 末尾插入一个空字符串，以保持长度和切割成分相同
+        para2sent = [x + y for x, y in zip(para2sent, seg_word)]  # 顺序可根据需求调换
+        # 除去句尾的括号项
+        para2sent = [re.sub('\([\s\S]{1,4}\)$', '', sent) for sent in para2sent]
+
         return [one for one in para2sent if len(one) > 10]
 
     def sent_label(self, one_data, one_sent, label_map):
@@ -67,6 +71,7 @@ class Division:
             if pd.isna(value):
                 continue
             elif 'sentence' in name:
+                value = value.replace('，', ',')
                 for sent in one_sent:
                     if value in sent.strip() or sent.strip() in value:
                         label[sent.strip()] = label_map[name]
@@ -104,14 +109,16 @@ class Division:
 
 
 if __name__ == '__main__':
-    ori_data = read_annotation(filename=r'data/matchtxt.xlsx', sheet_name='Sheet1')
-
     txt_set = r'data/txt_set/'
     ebitda_txt = r'data/adjust_txt/'
-    ext = Paragraph_Extract(ori_data)
-    data = ext.deal(input_path=txt_set, output_path=ebitda_txt)
-
     sent_txt = r'data/sent_label'
+    # 两批数据处理
+    ori_data = read_annotation(filename=r'data/merge_data.xlsx', sheet_name='Sheet1')
+    #
+    # ext = Paragraph_Extract(ori_data)
+    # data = ext.deal(input_path=txt_set, output_path=ebitda_txt)
+
     division = Division(ori_data)
     division.deal(label_map=r'data/label_map.json', txtfilepath=ebitda_txt, labelfilepath=sent_txt)
+
     pass

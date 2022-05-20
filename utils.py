@@ -63,10 +63,9 @@ def read_annotation(filename, sheet_name):
         df_NI: dataframe
     """
     df_NI = pd.read_excel(filename, sheet_name=sheet_name)
-    df_NI['facstartdate'] = df_NI['facstartdate'].dt.strftime('%Y%m%d')
     df_NI['txt_id'] = df_NI['file_name']
     df_NI.set_index('txt_id', inplace=True)
-    df_NI.head()
+    # df_NI.head()
 
     return df_NI
 
@@ -114,6 +113,7 @@ def move_txt(soure_file, dirname):
             new_file_abspath = os.path.join(dirname, ('(%s)%s' % ((max(ref_out) + 1), file_suffix)).join(
                 file_name.split('%s' % file_suffix)))
             shutil.move(soure_file, new_file_abspath)
+        print(soure_file)
 
     except Exception as e:
         print('err', e)
