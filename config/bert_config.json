@@ -15,14 +15,14 @@
   "bert_model_path": "../transformers_PTM/bert-base-uncased/",
   "pooling": "first-last-avg",
   "hidden_size": 768,
-  "num_classes": 20,
+  "num_classes": 19,
   "dropout": 0.01,
 
   "lr": 3e-5,
   "num_epoch": 100,
-  "warmup_ratio": 0.1,
+  "warmup_ratio": 0.05,
   "gradient_accumulation_steps": 1,
   "max_grad_norm": 1e-3,
 
-  "experiment_name": "BERT-fine_tune-data1"
+  "experiment_name": "BERT-data1-multi_class"
 }

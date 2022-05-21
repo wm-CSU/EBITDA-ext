@@ -33,39 +33,7 @@ def calculate_accuracy_f1(
                labels=LABELS, average='macro')
 
 
-def get_labels_from_file(filename):
-    """Get labels on the last column from file.
-
-    Args:
-        filename: file name
-
-    Returns:
-        List[str]: label list
-    """
-    labels = []
-    with codecs.open(filename, 'r', encoding='utf-8') as fin:
-        fin.readline()
-        for line in fin:
-            labels.append(line.strip().split(',')[-1])
-    return labels
-
-
-def eval_file(golds_file, predicts_file):
-    """Evaluate submission file
-
-    Args:
-        golds_file: file path
-        predicts_file:  file path
-
-    Returns:
-        accuracy, f1 score
-    """
-    golds = get_labels_from_file(golds_file)
-    predicts = get_labels_from_file(predicts_file)
-    return calculate_accuracy_f1(golds, predicts)
-
-
-def evaluate(tokenizer, model, data_loader, device) -> List[str]:
+def evaluate(tokenizer, model, data_loader, device, multi_class: bool = False):
     """Evaluate model on data loader in device.
 
     Args:
@@ -77,31 +45,27 @@ def evaluate(tokenizer, model, data_loader, device) -> List[str]:
     Returns:
         answer list, sent_list
     """
+    from torch import nn
     model.eval()
     # outputs = torch.tensor([], dtype=torch.float).to(device)
     answer_list, sent_list = [], []
-    # for batch in tqdm(data_loader, desc='Evaluation', ascii=True, ncols=80, leave=True, total=len(data_loader)):
-    for _, data in enumerate(data_loader):
-        batch = tuple(t.to(device) for t in data)
+    for batch in tqdm(data_loader, desc='Evaluation', ascii=True, ncols=80, leave=True, total=len(data_loader)):
+    # for _, batch in enumerate(data_loader):
+        batch = tuple(t.to(device) for t in batch)
         with torch.no_grad():
             logits, _ = model(*batch)
         # outputs = torch.cat([outputs, torch.argmax(logits, dim=1)])
-        # sent_list.extend(tokenizer.decode_batch(data[0], skip_special_tokens=True))
+
         sent_list.extend([tokenizer.decode(x, skip_special_tokens=True) for x in batch[0]])
-        answer_list.extend(torch.argmax(logits, dim=1).detach().cpu().numpy().tolist())
 
-    return [str(x) for x in answer_list], sent_list
+        if multi_class:
+            predictions = nn.Sigmoid()(logits)
+            compute_pred = [[1 if one > 0.90 else 0 for one in row] for row in
+                            predictions.detach().cpu().numpy().tolist()]
+            answer_list.extend(compute_pred)  # multi-class
+        else:
+            answer_list.extend(torch.argmax(logits, dim=1).detach().cpu().numpy().tolist())
+            answer_list = [str(x) for x in answer_list]
 
+    return answer_list, sent_list
 
-def evaluate_main(golden_file='data/task1.2-test-labels.csv', predict_file='result/bert-test1.csv'):
-    acc, f1_score = eval_file(golden_file, predict_file)
-    print("acc: {}, f1: {}".format(acc, f1_score))
-
-
-if __name__ == '__main__':
-    # fire.Fire(main)
-    # 实验结果计算
-    # for i in range(10):
-    #     file = os.path.join('task1.2/result/', 'bert-test1-' + str(i) + '.csv')
-    #     evaluate_main(predict_file=file)
-    pass

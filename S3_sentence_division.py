@@ -14,6 +14,7 @@ from S2_EBITDA_locate import Paragraph_Extract
 
 class Division:
     def __init__(self, data, Train: bool = True):
+        self.num_classes = 19
         if Train:
             self.data = Drop_Redundance(data)  # 原生数据预处理（冗余删除）
         else:
@@ -65,7 +66,7 @@ class Division:
         # 一条数据的sentence与label对应
         label = {}
         for sent in one_sent:
-            label[sent.strip()] = 0
+            label[sent.strip()] = [0] * self.num_classes
 
         for (name, value) in one_data.items():
             if pd.isna(value):
@@ -74,12 +75,8 @@ class Division:
                 value = value.replace('，', ',')
                 for sent in one_sent:
                     if value in sent.strip() or sent.strip() in value:
-                        label[sent.strip()] = label_map[name]
-                        # 一键多值,处理重复标注
-                        # if label[sent.strip()]==0:
-                        #     label[sent.strip()] = label_map[name]
-                        # else:
-                        #     label[sent.strip()] = [label[sent.strip()], label_map[name]]
+                        # label[sent.strip()] = label_map[name]  # one-class
+                        label[sent.strip()][label_map[name] - 1] = 1  # multi-class
                     else:
                         continue
             else:
@@ -111,14 +108,15 @@ class Division:
 if __name__ == '__main__':
     txt_set = r'data/txt_set/'
     ebitda_txt = r'data/adjust_txt/'
-    sent_txt = r'data/sent_label'
+    # sent_txt = r'data/sent_label'
+    multi_class_sent_txt = r'data/sent_multi_label'
     # 两批数据处理
     ori_data = read_annotation(filename=r'data/merge_data.xlsx', sheet_name='Sheet1')
-    #
-    # ext = Paragraph_Extract(ori_data)
-    # data = ext.deal(input_path=txt_set, output_path=ebitda_txt)
+
+    ext = Paragraph_Extract(ori_data)
+    data = ext.deal(input_path=txt_set, output_path=ebitda_txt)
 
     division = Division(ori_data)
-    division.deal(label_map=r'data/label_map.json', txtfilepath=ebitda_txt, labelfilepath=sent_txt)
+    division.deal(label_map=r'data/label_map.json', txtfilepath=ebitda_txt, labelfilepath=multi_class_sent_txt)
 
     pass

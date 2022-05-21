@@ -15,7 +15,7 @@ Usage:
     data = Data('model/bert/vocab.txt', model_type='bert')
     test_set = data.load_file('SMP-CAIL2021-test.csv', train=False)
 """
-
+import re
 import os
 import torch
 from torch.utils.data import TensorDataset
@@ -37,23 +37,19 @@ class Data:
 
     def __init__(self,
                  vocab_file='',
-                 max_seq_len: int = 512,
-                 model_type: str = 'bert'):
+                 max_seq_len: int = 512):
         """Initialize data processor.
         Args:
             vocab_file: one word each line
             max_seq_len: max sequence length, default: 512
-            model_type: 'bert'
         """
-        # self.model_type = model_type
         self.tokenizer = BertTokenizer(vocab_file)
         self.max_seq_len = max_seq_len
 
     def load_file(self,
                   filename: str = 'data/Nonrecurring Items_陈炫衣_20220226.xlsx',
                   sheet_name: str = 'Sheet1',
-                  txt_path: str = 'data/sent_label/',
-                  train: str = 'train'):
+                  txt_path: str = 'data/sent_label/'):
         """Load train file and construct TensorDataset.
 
         Args:
@@ -62,83 +58,51 @@ class Data:
             txt_path:
                 If True, txt with 'sentence \t label'
                 Otherwise, txt with paragraph
-            train:
-                If True, train file with 'sentence \t label' in txt_path
-                Otherwise, test file without label
 
         Returns:
-            BERT model:
-            Train:
+            dataset:
                 torch.utils.data.TensorDataset
                     each record: (input_ids, input_mask, segment_ids, label)
-            Test:
-                [torch.utils.data.TensorDataset]
-                    each record: (input_ids, input_mask, segment_ids)
         """
         ori_data = read_annotation(filename=filename, sheet_name=sheet_name)
         sent_list, label_list = [], []
-        if train == 'test':
-            division = Division(ori_data, Train=False)
-            # dataset = []
-            for index, one in division.data.iterrows():
-                # sent_list = []
-                filename = os.path.join(txt_path, index + '.txt')
-                sentences = division.txt2sent(filename=filename)
-                for sent in sentences:
-                    sent_list.append(self.tokenizer.tokenize(sent))
 
-                # dataset.append(self._convert_sentence_to_bert_dataset(sent_list, label_list))
-            dataset = self._convert_sentence_to_bert_dataset(sent_list, label_list)
+        division = Division(ori_data)
+        for index, one in division.data.iterrows():
+            filename = os.path.join(txt_path, index + '.txt')
+            f = open(filename, 'r', encoding='utf8')
+            for line in f.readlines():
+                one = line.split('\t')
+                sent_list.append(self.tokenizer.tokenize(one[0]))
+                # label_list.append(int(one[1]))
+                label_list.append(eval(one[1]))
 
-        else:
-            division = Division(ori_data)
-            for index, one in division.data.iterrows():
-                filename = os.path.join(txt_path, index + '.txt')
-                f = open(filename, 'r', encoding='utf8')
-                for line in f.readlines():
-                    one = line.split('\t')
-                    sent_list.append(self.tokenizer.tokenize(one[0]))
-                    label_list.append(int(one[1]))
-                    if int(one[1]) != 0:
-                        for _ in range(9):
-                            sent_list.append(self.tokenizer.tokenize(one[0]))
-                            label_list.append(int(one[1]))
+                if eval(one[1]) != [0] * division.num_classes:
+                    for _ in range(9):
+                        sent_list.append(self.tokenizer.tokenize(one[0]))
+                        label_list.append(eval(one[1]))
 
-            dataset = self._convert_sentence_to_bert_dataset(sent_list, label_list)
-            # if train == 'train':
-            #     dataset = self._convert_sentence_to_bert_dataset(sent_list, label_list)
-            # elif train == 'valid':
-            #     dataset = self._convert_sentence_to_bert_dataset(sent_list, [])
-            # else:
-            #     label_list = []
-            #     dataset = self._convert_sentence_to_bert_dataset([], [])
-            #     print('mode error!')
+        dataset = self._convert_sentence_to_bert_dataset(sent_list, label_list)
 
-        return dataset, label_list
+        return dataset
 
     def load_train_and_valid_files(self,
-                                   train_file, train_sheet, train_txt,
-                                   valid_file, valid_sheet, valid_txt,
-                                   ):
-        """Load all files for task.
+                                   train_file, train_sheet, train_txt,):
+        """Load train files for task.
 
         Args:
-            train_file, valid_file: files for sentence classification.
+            train_file: files for sentence classification.
 
         Returns:
-            train_set, valid_set_train, valid_set_valid
+            train_set, valid_set_train
             all are torch.utils.data.TensorDataset
         """
         print('Loading train records for train...')
-        mydataset, data_labels = self.load_file(train_file, sheet_name=train_sheet, txt_path=train_txt, train='train')
+        mydataset = self.load_file(train_file, sheet_name=train_sheet, txt_path=train_txt)
         train_set, valid_set = self.dataset_split(mydataset)
         print(len(train_set), 'train records loaded.', len(valid_set), 'valid records loaded.')
-        print('Loading valid records...')
-        valid_set_valid, _ = self.load_file(valid_file, sheet_name=valid_sheet,
-                                            txt_path=valid_txt, train='test')
-        print(len(valid_set_valid), 'valid records loaded.')
 
-        return train_set, valid_set, valid_set_valid
+        return train_set, valid_set
 
     def dataset_split(self, dataset, split_ratio=0.7):
         train, valid = random_split(
@@ -195,13 +159,91 @@ class Data:
             all_input_ids, all_input_mask, all_segment_ids)
 
 
+class TestData:
+    def __init__(self,
+                 vocab_file='',
+                 max_seq_len: int = 512,):
+        """Initialize data processor.
+        Args:
+            vocab_file: one word each line
+            max_seq_len: max sequence length, default: 512
+        """
+        self.tokenizer = BertTokenizer(vocab_file)
+        self.max_seq_len = max_seq_len
+        self.datatool = Data(vocab_file, max_seq_len=max_seq_len)
+
+    def load_from_txt(self, filename):
+        """Load train file and construct TensorDataset.
+
+        Args:
+            file_path: train file
+            sheet_name: sheet name
+            txt_path:
+                If True, txt with 'sentence \t label'
+                Otherwise, txt with paragraph
+            train:
+                If True, train file with 'sentence \t label' in txt_path
+                Otherwise, test file without label
+
+        Returns:
+            BERT model:
+            Train:
+                torch.utils.data.TensorDataset
+                    each record: (input_ids, input_mask, segment_ids, label)
+            Test:
+                [torch.utils.data.TensorDataset]
+                    each record: (input_ids, input_mask, segment_ids)
+        """
+        sent_list = []
+
+        sentences = self.txt2sent(filename=filename)
+        for sent in sentences:
+            sent_list.append(self.tokenizer.tokenize(sent))
+
+        dataset = self.datatool._convert_sentence_to_bert_dataset(sent_list, [])
+
+        return dataset
+
+    def txt2sent(self, filename):
+        '''
+        copy from Division (S3_sentence_division.py )
+        :param filename:
+        :return: []
+        '''
+        sentence = []
+        with open(filename, 'r', encoding='utf8') as f:
+            paragraph = f.readlines()
+            for para in paragraph:
+                para2sent = self.sent_split(paragraph=para)
+                sentence.extend(para2sent)
+        f.close()
+
+        return [x for x in sentence if x != '']
+
+    def sent_split(self, paragraph):
+        '''
+        copy from Division (S3_sentence_division.py )
+        :param paragraph:
+        :return:
+        '''
+        # 段落划分为句子并除去过短元素（如单数字或空格）
+        para2sent = re.split(';|\.|\([\s\S]{1,4}\)', paragraph.strip())
+        # 保留分割符号，置于句尾，比如标点符号
+        seg_word = re.findall(';|\.|\([\s\S]{1,4}\)', paragraph.strip())
+        seg_word.extend(" ")  # 末尾插入一个空字符串，以保持长度和切割成分相同
+        para2sent = [x + y for x, y in zip(para2sent, seg_word)]  # 顺序可根据需求调换
+        # 除去句尾的括号项
+        para2sent = [re.sub('\([\s\S]{1,4}\)$', '', sent) for sent in para2sent]
+
+        return [one for one in para2sent if len(one) > 10]
+
+
 def test_data():
     """Test for data module."""
     # For BERT model
-    data = Data('model/bert-base-uncased/vocab.txt', model_type='bert', max_seq_len=200)
-    train, _, _, = data.load_train_and_valid_files(
-        train_file='data/matchtxt.xlsx', train_sheet='Sheet1', train_txt='data/sent_label/',
-        valid_file='data/matchtxt.xlsx', valid_sheet='Sheet1', valid_txt='data/sent_label/',
+    data = Data('model/bert-base-uncased/vocab.txt', max_seq_len=200)
+    train, _ = data.load_train_and_valid_files(
+        train_file='data/batch_one.xlsx', train_sheet='Sheet1', train_txt='data/sent_multi_label/',
     )
 
 

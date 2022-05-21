@@ -28,14 +28,13 @@ from torch import nn
 from torch.utils.data import DataLoader
 # from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm, trange
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from transformers.optimization import (
     AdamW, get_linear_schedule_with_warmup, get_constant_schedule)
 
-from S4_dataset import Data
-from S5_model import BertForClassification
-from S7_evaluate import evaluate, calculate_accuracy_f1
+from S7_evaluate import calculate_accuracy_f1
 
-from utils import get_csv_logger, get_path, load_torch_model
+from utils import get_csv_logger
 from tools.pytorchtools import EarlyStopping
 
 
@@ -81,23 +80,19 @@ class Trainer:
             optimizer
         """
         # # no_decay = ['bias', 'gamma', 'beta']
-        no_decay = ['bias', 'LayerNorm.weight']
-        optimizer_parameters = [
-            {'params': [p for n, p in self.model.named_parameters()
-                        if not any(nd in n for nd in no_decay)],
-             'weight_decay_rate': 0.01},
-            {'params': [p for n, p in self.model.named_parameters()
-                        if any(nd in n for nd in no_decay)],
-             'weight_decay_rate': 0.0}]
+        # no_decay = ['bias', 'LayerNorm.weight']
         # optimizer_parameters = [
-        #     {'params': [p for p in self.model.parameters() if p.requires_grad],
-        #      'weight_decay_rate': 0.01}
-        # ]
+        #     {'params': [p for n, p in self.model.named_parameters()
+        #                 if not any(nd in n for nd in no_decay)],
+        #      'weight_decay_rate': 0.01},
+        #     {'params': [p for n, p in self.model.named_parameters()
+        #                 if any(nd in n for nd in no_decay)],
+        #      'weight_decay_rate': 0.0}]
         optimizer = AdamW(
             # [p for p in self.model.parameters() if p.requires_grad],
-            optimizer_parameters,
+            # optimizer_parameters,
             # filter(lambda p: p.requires_grad, self.model.parameters()),
-            # self.model.parameters(),
+            self.model.parameters(),
             lr=self.config.lr,
             betas=(0.9, 0.999),
             weight_decay=1e-8,
@@ -115,7 +110,7 @@ class Trainer:
             num_training_steps=self.config.num_training_steps)
         return scheduler
 
-    def _evaluate(self, data_loader) -> List[str]:
+    def _evaluate(self, data_loader):
         """Evaluate model on data loader in device for train.
 
         Args:
@@ -132,9 +127,13 @@ class Trainer:
             with torch.no_grad():
                 logits, _ = self.model(*batch[:-1])
             labels.extend(batch[-1].detach().cpu().numpy().tolist())
-            answer_list.extend(torch.argmax(logits, dim=1).detach().cpu().numpy().tolist())
-
-        return [str(x) for x in answer_list], [str(x) for x in labels]
+            # answer_list.extend(torch.argmax(logits, dim=1).detach().cpu().numpy().tolist())  # single-class
+            predictions = nn.Sigmoid()(logits)
+            compute_pred = [[1 if one > 0.90 else 0 for one in row] for row in
+                            predictions.detach().cpu().numpy().tolist()]
+            answer_list.extend(compute_pred)  # multi-class
+        # return [str(x) for x in answer_list], [str(x) for x in labels]
+        return answer_list, labels
 
     def _epoch_evaluate_update_description_log(
             self, tqdm_obj, logger, epoch):
@@ -150,17 +149,21 @@ class Trainer:
         """
         # Evaluate model for train and valid set
         predictions, labels = self._evaluate(data_loader=self.data_loader['train'])
-        train_acc, train_f1 = calculate_accuracy_f1(labels, predictions)
+        # train_acc, train_f1 = calculate_accuracy_f1(labels, predictions)
+        train_acc, train_f1 = self._compute_metrics(labels=labels, preds=predictions, )
         valid_predictions, valid_labels = self._evaluate(data_loader=self.data_loader['valid_train'])
-        valid_acc, valid_f1 = calculate_accuracy_f1(valid_labels, valid_predictions)
+        # valid_acc, valid_f1 = calculate_accuracy_f1(valid_labels, valid_predictions)
+        valid_acc, valid_f1 = self._compute_metrics(labels=valid_labels, preds=valid_predictions, )
         # Update tqdm description for command line
         tqdm_obj.set_description(
             'Epoch: {:d}, train_acc: {:.6f}, train_f1: {:.6f}, '
             'valid_acc: {:.6f}, valid_f1: {:.6f}, '.format(
                 epoch, train_acc, train_f1, valid_acc, valid_f1))
+                # epoch, train_result['accuracy'], train_result['f1'], valid_result['accuracy'], valid_result['f1']))
         # Logging
         logger.info(','.join([str(epoch)] + [str(train_acc), str(train_f1), str(valid_acc), str(valid_f1)]))
         return train_acc, train_f1, valid_acc, valid_f1
+        # return train_result['accuracy'], train_result['f1'], valid_result['accuracy'], valid_result['f1']
 
     def save_model(self, filename):
         """Save model to file.
@@ -223,13 +226,13 @@ class Trainer:
                     for step, batch in enumerate(tqdm_obj):
                         batch = tuple(t.to(self.device) for t in batch)
                         logits, _ = self.model(*batch[:-1])  # the last one is label
-                        # origin
-                        # pred = torch.argmax(logits, dim=1).long()
-                        loss = self.criterion(logits, batch[-1])
-                        # # try multi-class
-                        # predictions = nn.Sigmoid()(logits)
-                        # # loss = nn.BCEWithLogitsLoss()(predictions, true_labels.to(self.device).float())
-                        # loss = nn.BCELoss()(predictions, batch[-1])
+                        # # origin one-class
+                        # # pred = torch.argmax(logits, dim=1).long()
+                        # loss = self.criterion(logits, batch[-1])
+                        # try multi-class
+                        predictions = nn.Sigmoid()(logits)
+                        loss = nn.BCELoss()(predictions.float(), batch[-1].float())
+                        # loss = nn.BCEWithLogitsLoss()(predictions, true_labels.to(self.device).float())
 
                         train_loss_sum += loss.item()
                         if self.config.gradient_accumulation_steps > 1:  # 多次叠加
@@ -248,7 +251,7 @@ class Trainer:
                 tqdm_obj.close()
                 raise
             tqdm_obj.close()
-            # progress_bar.update(1)
+            progress_bar.update(1)
             results = self._epoch_evaluate_update_description_log(
                 tqdm_obj=progress_bar, logger=epoch_logger, epoch=epoch + 1)
             # 分别保存分步模型，最新模型，最优模型
@@ -274,6 +277,20 @@ class Trainer:
                 break
 
         return best_model_state_dict
+
+    def _compute_metrics(self, labels, preds):
+        precision, recall, f1_micro, _ = precision_recall_fscore_support(labels, preds, average='micro')
+        precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(labels, preds, average='macro')
+        acc = accuracy_score(labels, preds)
+        # return {
+        #     'accuracy': acc,
+        #     'precision': precision,
+        #     'recall': recall,
+        #     'f1_micro': f1_micro,
+        #     'f1_macro': f1_macro,
+        #     'f1': (f1_micro + f1_macro) / 2,
+        # }
+        return acc, (f1_micro + f1_macro) / 2
 
     @staticmethod
     def load_last_model(model, model_path, optimizer,
@@ -306,91 +323,3 @@ class Trainer:
 
         return model, optimizer, start_epoch, best_acc
 
-
-def main(config_file='config/bert_config.json'):
-    """Main method for training.
-
-    Args:
-        config_file: in config dir
-    """
-    # 0. Load config and mkdir
-    with open(config_file) as fin:
-        config = json.load(fin, object_hook=lambda d: SimpleNamespace(**d))
-    get_path(os.path.join(config.model_path, config.experiment_name))
-    get_path(config.log_path)
-
-    # 1. Load data
-    data = Data(vocab_file=os.path.join(config.model_path, 'vocab.txt'),
-                max_seq_len=config.max_seq_len,
-                model_type=config.model_type)
-    datasets = data.load_train_and_valid_files(
-        train_file='data/merge_data.xlsx', train_sheet='Sheet1', train_txt='data/sent_label/',
-        valid_file='data/merge_data.xlsx', valid_sheet='Sheet1', valid_txt='data/adjust_txt/',
-    )
-    train_set, valid_set_train, valid_set_valid = datasets
-
-    if torch.cuda.is_available():
-        device = torch.device('cuda:0')
-        print('cuda is available!')
-        # rank = 0
-        # torch.cuda.set_device(rank)
-        # torch.distributed.init_process_group(backend="nccl", rank=0)
-        # sampler_train = DistributedSampler(train_set)
-    else:
-        device = torch.device('cpu')
-        # sampler_train = RandomSampler(train_set)
-
-    data_loader = {
-        # 'train': DataLoader(
-        #     train_set, sampler=sampler_train, batch_size=config.batch_size),
-        'train': DataLoader(
-            train_set, batch_size=config.batch_size, shuffle=True),
-        'valid_train': DataLoader(
-            valid_set_train, batch_size=config.batch_size, shuffle=False),
-        'valid_valid': DataLoader(
-            valid_set_valid, batch_size=config.batch_size, shuffle=False)
-    }
-
-    # 2. Build model
-    model = BertForClassification(config)
-    model.to(device)
-    # if torch.cuda.is_available():
-    #     model = torch.nn.parallel.DistributedDataParallel(
-    #     model, find_unused_parameters=True)
-
-    # 3. Train
-    trainer = Trainer(model=model, data_loader=data_loader,
-                      # train_labels=train_labels, valid_labels=valid_labels,
-                      device=device, config=config)
-    best_model_state_dict = trainer.train(ReTrain=False)
-    # 4. Save model
-    torch.save(best_model_state_dict,
-               os.path.join(config.model_path, 'model.bin'))
-    # 5. evaluate only
-    # model, _, _, _ = trainer.load_last_model(trainer.model,
-    #                                          os.path.join(trainer.config.model_path, trainer.config.experiment_name,
-    #                                                       trainer.config.model_type + '-last_model.bin'),
-    #                                          trainer.optimizer, False)
-    model = load_torch_model(trainer.model,
-                             os.path.join(trainer.config.model_path, trainer.config.experiment_name,
-                                          trainer.config.model_type + '-best_model.bin'),
-                             False)
-    valid_predictions = evaluate(model, data_loader['valid_valid'], device)
-    print(valid_predictions)
-    # train_acc, train_f1 = calculate_accuracy_f1(
-    #     [str(x) for x in train_labels], train_predictions)
-    # print(train_acc, train_f1)
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        '-c', '--config_file', default='config/bert_config.json',
-        help='model config file')
-
-    parser.add_argument(
-        '--local_rank', default=0,
-        help='used for distributed parallel')
-    args = parser.parse_args()
-
-    main(args.config_file)
