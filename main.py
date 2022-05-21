@@ -85,14 +85,14 @@ def main(config_file='config/bert_config.json',
 
         pred_tool = Prediction(vocab_file=os.path.join(config.model_path, 'vocab.txt'),
                                max_seq_len=config.max_seq_len,
-                               # test_file='data/test.xlsx',
-                               # test_sheet='Sheet1',
-                               # test_txt='data/test_adjust_txt/',
-                               test_file='data/batch_two_for_test.xlsx', test_sheet='Sheet1',
-                               test_txt='data/adjust_txt/',
+                               test_file='data/test.xlsx',
+                               test_sheet='Sheet1',
+                               test_txt='data/test_adjust_txt/',
+                               # test_file='data/batch_two_for_test.xlsx', test_sheet='Sheet1',
+                               # test_txt='data/adjust_txt/',
                                )
         pred_tool.evaluate_for_all(model=model, device=device,
-                                   to_file='data/prediction-batch2.xlsx', to_sheet='Sheet1',
+                                   to_file='data/prediction-with mc.xlsx', to_sheet='Sheet1',
                                    multi_class=True)
 
 
@@ -107,5 +107,5 @@ if __name__ == '__main__':
         help='used for distributed parallel')
     args = parser.parse_args()
 
-    main(args.config_file, need_train=True, ReTrain=True)
+    main(args.config_file, need_train=False, ReTrain=True)
     # fire.Fire(main)

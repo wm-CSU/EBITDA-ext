@@ -149,21 +149,19 @@ class Trainer:
         """
         # Evaluate model for train and valid set
         predictions, labels = self._evaluate(data_loader=self.data_loader['train'])
-        # train_acc, train_f1 = calculate_accuracy_f1(labels, predictions)
-        train_acc, train_f1 = self._compute_metrics(labels=labels, preds=predictions, )
+        # train_acc, train_f1 = calculate_accuracy_f1(labels, predictions)  # one-class
+        train_acc, train_f1 = self._compute_metrics(labels=labels, preds=predictions, )  # multi-class
         valid_predictions, valid_labels = self._evaluate(data_loader=self.data_loader['valid_train'])
-        # valid_acc, valid_f1 = calculate_accuracy_f1(valid_labels, valid_predictions)
-        valid_acc, valid_f1 = self._compute_metrics(labels=valid_labels, preds=valid_predictions, )
+        # valid_acc, valid_f1 = calculate_accuracy_f1(valid_labels, valid_predictions)  # one-class
+        valid_acc, valid_f1 = self._compute_metrics(labels=valid_labels, preds=valid_predictions, )  # multi-class
         # Update tqdm description for command line
         tqdm_obj.set_description(
             'Epoch: {:d}, train_acc: {:.6f}, train_f1: {:.6f}, '
             'valid_acc: {:.6f}, valid_f1: {:.6f}, '.format(
                 epoch, train_acc, train_f1, valid_acc, valid_f1))
-                # epoch, train_result['accuracy'], train_result['f1'], valid_result['accuracy'], valid_result['f1']))
         # Logging
         logger.info(','.join([str(epoch)] + [str(train_acc), str(train_f1), str(valid_acc), str(valid_f1)]))
         return train_acc, train_f1, valid_acc, valid_f1
-        # return train_result['accuracy'], train_result['f1'], valid_result['accuracy'], valid_result['f1']
 
     def save_model(self, filename):
         """Save model to file.
@@ -227,7 +225,6 @@ class Trainer:
                         batch = tuple(t.to(self.device) for t in batch)
                         logits, _ = self.model(*batch[:-1])  # the last one is label
                         # # origin one-class
-                        # # pred = torch.argmax(logits, dim=1).long()
                         # loss = self.criterion(logits, batch[-1])
                         # try multi-class
                         predictions = nn.Sigmoid()(logits)

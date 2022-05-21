@@ -41,20 +41,18 @@ def evaluate(tokenizer, model, data_loader, device, multi_class: bool = False):
         model: model to be evaluate
         data_loader: torch.utils.data.DataLoader
         device: cuda or cpu
-
+        multi_class:
     Returns:
         answer list, sent_list
     """
     from torch import nn
     model.eval()
-    # outputs = torch.tensor([], dtype=torch.float).to(device)
     answer_list, sent_list = [], []
     for batch in tqdm(data_loader, desc='Evaluation', ascii=True, ncols=80, leave=True, total=len(data_loader)):
     # for _, batch in enumerate(data_loader):
         batch = tuple(t.to(device) for t in batch)
         with torch.no_grad():
             logits, _ = model(*batch)
-        # outputs = torch.cat([outputs, torch.argmax(logits, dim=1)])
 
         sent_list.extend([tokenizer.decode(x, skip_special_tokens=True) for x in batch[0]])
 

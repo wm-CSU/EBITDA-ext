@@ -26,6 +26,15 @@ class Prediction:
     def evaluate_for_all(self, model, device,
                          to_file='data/predict.xlsx', to_sheet='Sheet1',
                          multi_class: bool = False):
+        '''
+        遍历测试集，逐条数据预测
+        :param model:
+        :param device:
+        :param to_file:
+        :param to_sheet:
+        :param multi_class:
+        :return:
+        '''
         for index, one in self.data.iterrows():
             filename = os.path.join(self.test_txt, index + '.txt')
             one_dataset = self.dataset_tool.load_from_txt(filename)

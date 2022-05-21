@@ -8,12 +8,13 @@ Usage:
     from data import Data
     # For BERT model
     # For training, load train and valid set
-    data = Data('model/bert/vocab.txt', model_type='bert')
-    datasets = data.load_train_and_valid_files('adjust.csv', 'SMP-CAIL2021-valid.csv')
-    train_set, valid_set_train, valid_set_valid = datasets
+    data = Data('model/bert/vocab.txt')
+    datasets = data.load_train_and_valid_files(train_file='data/batch_one.xlsx', train_sheet='Sheet1',
+                                                train_txt='data/sent_multi_label/',)
+    train_set, valid_set_train = datasets
     # For testing, load test set
-    data = Data('model/bert/vocab.txt', model_type='bert')
-    test_set = data.load_file('SMP-CAIL2021-test.csv', train=False)
+    data = TestData('model/bert/vocab.txt')
+    test_set = data.load_from_txt(os.path.join(test_txt, index + '.txt'))
 """
 import re
 import os
