@@ -111,10 +111,10 @@ if __name__ == '__main__':
     # sent_txt = r'data/sent_label'
     multi_class_sent_txt = r'data/sent_multi_label'
     # 两批数据处理
-    ori_data = read_annotation(filename=r'data/merge_data.xlsx', sheet_name='Sheet1')
+    ori_data = read_annotation(filename=r'data/batch_one.xlsx', sheet_name='Sheet1')
 
-    ext = Paragraph_Extract(ori_data)
-    data = ext.deal(input_path=txt_set, output_path=ebitda_txt)
+    # ext = Paragraph_Extract(ori_data)
+    # data = ext.deal(input_path=txt_set, output_path=ebitda_txt)
 
     division = Division(ori_data)
     division.deal(label_map=r'data/label_map.json', txtfilepath=ebitda_txt, labelfilepath=multi_class_sent_txt)

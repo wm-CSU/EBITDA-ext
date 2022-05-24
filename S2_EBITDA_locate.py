@@ -230,7 +230,7 @@ class Paragraph_Extract:
         paralist = []
         Page_continue, Segment = False, False
         para = ''
-        punctuation = re.compile(r'.*[.,:;!?]$')
+        punctuation = re.compile(r'.*[.:;!?]$')
         for line in text:
             if line.strip() == '' or line.strip().isdigit():
                 Segment = True
@@ -290,15 +290,13 @@ class Paragraph_Extract:
 
 
 if __name__ == '__main__':
-    ori_data = read_annotation(filename=r'data/test.xlsx', sheet_name='Sheet1')
+    ori_data = read_annotation(filename=r'data/batch_one.xlsx', sheet_name='Sheet1')
     # ext = pdf_Paragraph_Extract(ori_data)
-    # import pdfplumber
-    # pdf = pdfplumber.open('data/陈炫衣agreement/165052_20110329.pdf')
-    # ext.goal_locate(pdf, r'data/txt/165052_20110329.txt')
     # all pdf deal time: 5391.349329710007 s
     ext = Paragraph_Extract(ori_data, Train=False)
     start = time.time()
-    ext.deal(input_path=r'data/test_txt_set/', output_path=r'data/test_adjust_txt/')
+    ext.deal(input_path=r'data/txt_set/', output_path=r'data/adjust_txt/')
+    # ext.deal(input_path=r'data/test_txt_set/', output_path=r'data/test_adjust_txt/')
     end = time.time()
     print('time: {} s'.format(end - start))
     # time: 38.088237047195435 s (only batch one);  time: 79.5703809261322 s (all data);
