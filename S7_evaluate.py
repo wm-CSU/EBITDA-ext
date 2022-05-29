@@ -33,6 +33,37 @@ def calculate_accuracy_f1(
                labels=LABELS, average='macro')
 
 
+def subclass_confusion_matrix(targetSrc, predSrc):
+    from sklearn.metrics import multilabel_confusion_matrix
+    import numpy as np
+
+    # targetSrc = [[0, 1, 1, 1], [0, 0, 1, 0], [1, 0, 0, 1], [1, 1, 1, 0], [1, 0, 0, 0]]
+    # predSrc = [[0, 1, 0, 1], [0, 0, 1, 1], [1, 0, 0, 1], [1, 0, 1, 0], [1, 0, 0, 0]]
+    target = np.array(targetSrc)
+    pred = np.array(predSrc)
+
+    mcm1 = multilabel_confusion_matrix(target, pred, labels=LABELS)  # target在前，pred在后
+    # print(mcm1.shape)  # (4,2,2) 说明是3维数组
+    print('mcm1 is: \n', mcm1)  # 每一类的混淆矩阵组成的列表
+    pass
+
+
+def perf_measure(y_true, y_pred):
+    TP, FP, TN, FN = 0, 0, 0, 0
+
+    for i in range(len(y_true)):
+        if y_true[i] == 1 and y_pred[i] == 1:
+            TP += 1
+        if y_true[i] == 0 and y_pred[i] == 1:
+            FP += 1
+        if y_true[i] == 0 and y_pred[i] == 0:
+            TN += 1
+        if y_true[i] == 1 and y_pred[i] == 0:
+            FN += 1
+
+    return TP, FP, TN, FN
+
+
 def evaluate(tokenizer, model, data_loader, device, multi_class: bool = False):
     """Evaluate model on data loader in device.
 

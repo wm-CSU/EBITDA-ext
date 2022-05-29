@@ -150,7 +150,7 @@ class pdf_Paragraph_Extract:
 
 
 class Paragraph_Extract:
-    def __init__(self, ori_data, Train: bool=True):
+    def __init__(self, ori_data, Train: bool = True):
         if Train:
             self.data = Drop_Redundance(ori_data)  # 原生数据预处理（冗余删除）
         else:
@@ -167,7 +167,7 @@ class Paragraph_Extract:
                 # row['nest'] = 1 if nest else 0
                 print("{} is dealed.".format(filename))
             else:
-                print("ERROR! File is not accessible.")
+                print("ERROR! File {} is not accessible.".format(filename))
 
         return self.data
 
@@ -184,8 +184,8 @@ class Paragraph_Extract:
         ori_txt = f.readlines()
         paragraph = self.text2paragraph(ori_txt)
         # 构造正则表达式的pattern
-        ebitda = re.compile(r'EBITDA[\s\S]{0,40}(?:mean|:)')
-        net_income_place = re.compile(r'Net Income[\s\S]{0,40}(?:mean|:)')
+        ebitda = re.compile(r'EBIT[\s\S]{0,50}?(?:mean|:)')
+        net_income_place = re.compile(r'Net Income[\s\S]{0,50}?(?:mean|:)')
 
         # 逐段遍历找到段落
         EBITDA_exist, NI_exist, cont = False, False, False  # 判定 EBITDA 中是否嵌套使用了 Net Income, 冒号后续是否追加
@@ -228,11 +228,16 @@ class Paragraph_Extract:
         :return: paragraph: [str]
         '''
         paralist = []
+        if len(text) < 100:
+            # c
+            paralist = self.post_processing([x for x in text if x.strip() != ''])
+            return paralist
         Page_continue, Segment = False, False
         para = ''
-        punctuation = re.compile(r'.*[.:;!?]$')
+        punctuation = re.compile(r'.*[.!?]$')
+        page_number = re.compile(r'([0-9]+)|(- [0-9]+ -)|(-[0-9]+-)|(Page [0-9]+)')
         for line in text:
-            if line.strip() == '' or line.strip().isdigit():
+            if line.strip() == '' or page_number.match(line.strip()):
                 Segment = True
                 # continue
             elif Page_continue:
@@ -244,13 +249,10 @@ class Paragraph_Extract:
                 Segment = False
             else:
                 para = ' '.join([para, line.strip()])
-            # if not punctuation.match(para):
-            #     Page = True  # 段落未结束
             Page_continue = False if punctuation.match(para) else True
 
         paralist.append(para)
         paralist = self.post_processing(paralist)
-
         return paralist
 
     def post_processing(self, paragraph):
@@ -261,25 +263,18 @@ class Paragraph_Extract:
         '''
         # 删去过短的元素
         paragraph = [x for x in paragraph if len(x) >= 10]
-
-        para_len = [len(x.split(' ')) for x in paragraph]
-        mean_len = np.mean(para_len)
-        max_len = np.max(para_len)
         post_para = []
-        # 正则表达式不成功
-        # bounds = re.compile(r'\"(.*?)\"[\s\S]{0,40}(?:mean|:)(.*).$')
-        if mean_len >= 140 and max_len >= 1000:
-            for para in paragraph:
-                # res = bounds.findall(para)
-                # # post_para.extend(res)
-                # if res:
-                #     post_para.extend(res)
-                # else:
-                #     post_para.extend(para.split('.'))
-                post_para.extend(para.split('.'))
-        else:
-            post_para = paragraph
+        for para in paragraph:
+            # res = re.split(r'(?<=\.)([\s]*?“.+?”.*?(?:mean|:)+?.*?\.[\s]*?)(?=“)', para)
+            res = re.split(r'(?<=\.)([\s]*?“.+?”.*?\.[\s]*?)(?=“)', para)
+            res = [i for i in res if i]
+            if res:
+                post_para.extend(res)
+            else:
+                res2 = re.split(r'(?<=\.)([\s]*?.*?\.[\s]*?)', para)
+                post_para.extend([i for i in res2 if i])
 
+        post_para = [i for i in post_para if len(i) < 100000]
         return post_para
 
     def to_txt(self, text, filepath):
@@ -290,16 +285,34 @@ class Paragraph_Extract:
 
 
 if __name__ == '__main__':
-    ori_data = read_annotation(filename=r'data/batch_one.xlsx', sheet_name='Sheet1')
-    # ext = pdf_Paragraph_Extract(ori_data)
-    # all pdf deal time: 5391.349329710007 s
+    ori_data = read_annotation(filename=r'data/batch_test.xlsx', sheet_name='Sheet1')
     ext = Paragraph_Extract(ori_data, Train=False)
     start = time.time()
-    ext.deal(input_path=r'data/txt_set/', output_path=r'data/adjust_txt/')
-    # ext.deal(input_path=r'data/test_txt_set/', output_path=r'data/test_adjust_txt/')
+    # ext.deal(input_path=r'data/txt_set/', output_path=r'data/adjust_txt/')
+    ext.deal(input_path=r'data/test_txt_set/', output_path=r'data/test_adjust_txt/')
     end = time.time()
     print('time: {} s'.format(end - start))
-    # time: 38.088237047195435 s (only batch one);  time: 79.5703809261322 s (all data);
-    # time: 24.32954716682434 s(test_set)
+    # time: 21.095494270324707 s (only batch one);  time: 126.8917932510376 s (all data);
+    # time: 24.19935655593872 s(test_set)
+    #
+    # para = ' “US$”: dollars in lawful currency of the United States.  “US Guarantee Agreement”: the US ' \
+    #        'Guarantee Agreement to be executed and delivered by the Parent Borrower, the Subsidiary Borrower, ' \
+    #        'each US Subsidiary Guarantor and any Additional Borrower organized under the laws of any jurisdiction ' \
+    #        'in the United States, substantially in the form of Exhibit F-1.  "US Person”: a “United States person” ' \
+    #        'within the meaning of Section 7701(a)(30) of the Code.  “US Revolving Loan”, for such period means' \
+    #        ' as defined in Section 2.1. For purposes of this definition, the term “Material Acquisition” means ' \
+    #        'any acquisition or series of related acquisitions by the Company or any Subsidiary that ' \
+    #        '(A) constitutes a Permitted Acquisition. “US Subsidiary Guarantors”: the Wholly-Owned ' \
+    #        'Domestic Subsidiaries of the Parent Borrower. “US Swingline Loan”: as defined in Section 2.5(a). '
+    # res = re.split(r'(?<=\.)([\s]*?“.+?”.*?(?:mean|:)+?.*?\.[\s]+?)', para)
+    # # res2 = re.match(r'^(“.+?”.{0,40}?(?:mean|:)+?.*?)', para)
+    # # res = re.split(r'[\.]', para)
+    # res = [i for i in res if i]
+    # result = []
+    # if res:
+    #     print(res)
+    #     # print(res[::2])
+    # else:
+    #     print('error')
 
     pass
