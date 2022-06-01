@@ -229,29 +229,42 @@ class Paragraph_Extract:
         '''
         paralist = []
         if len(text) < 100:
-            # c
             paralist = self.post_processing([x for x in text if x.strip() != ''])
             return paralist
         Page_continue, Segment = False, False
         para = ''
         punctuation = re.compile(r'.*[.!?]$')
         page_number = re.compile(r'([0-9]+)|(- [0-9]+ -)|(-[0-9]+-)|(Page [0-9]+)')
+        text = [line for line in text if not page_number.match(line.strip())]
         for line in text:
             if line.strip() == '' or page_number.match(line.strip()):
                 Segment = True
+                # Page_continue = False if punctuation.match(para) else True
                 # continue
-            elif Page_continue:
-                Segment = False
-                para = ' '.join([para, line.strip()])
-            elif Segment:
-                paralist.append(para.replace('\xa0', ' '))
-                para = line.strip()
-                Segment = False
             else:
-                para = ' '.join([para, line.strip()])
+                if Segment and not Page_continue:
+                    paralist.append(para.replace('\xa0', ' '))
+                    para = line.strip()
+                    Segment = False
+                else:
+                    para = ' '.join([para, line.strip()])
+                    Segment = False
+
+            # if Page_continue:
+            #     Segment = False
+            #     para = ' '.join([para, line.strip()])
+            # elif Segment:
+            #     paralist.append(para.replace('\xa0', ' '))
+            #     para = line.strip()
+            #     Segment = False
+            # else:
+            #     para = ' '.join([para, line.strip()])
             Page_continue = False if punctuation.match(para) else True
 
         paralist.append(para)
+        # print(len(paralist))
+        # if len(paralist) < 300:
+        #     paralist = self.post_processing(paralist)
         paralist = self.post_processing(paralist)
         return paralist
 
@@ -285,34 +298,36 @@ class Paragraph_Extract:
 
 
 if __name__ == '__main__':
-    ori_data = read_annotation(filename=r'data/batch_test.xlsx', sheet_name='Sheet1')
-    ext = Paragraph_Extract(ori_data, Train=False)
+    ori_data1 = read_annotation(filename=r'data/batch_one.xlsx', sheet_name='Sheet1')
+    ext1 = Paragraph_Extract(ori_data1, Train=False)
     start = time.time()
-    # ext.deal(input_path=r'data/txt_set/', output_path=r'data/adjust_txt/')
-    ext.deal(input_path=r'data/test_txt_set/', output_path=r'data/test_adjust_txt/')
+    ext1.deal(input_path=r'data/txt_set/', output_path=r'data/adjust_txt/')
     end = time.time()
     print('time: {} s'.format(end - start))
-    # time: 21.095494270324707 s (only batch one);  time: 126.8917932510376 s (all data);
-    # time: 24.19935655593872 s(test_set)
-    #
-    # para = ' “US$”: dollars in lawful currency of the United States.  “US Guarantee Agreement”: the US ' \
-    #        'Guarantee Agreement to be executed and delivered by the Parent Borrower, the Subsidiary Borrower, ' \
-    #        'each US Subsidiary Guarantor and any Additional Borrower organized under the laws of any jurisdiction ' \
-    #        'in the United States, substantially in the form of Exhibit F-1.  "US Person”: a “United States person” ' \
-    #        'within the meaning of Section 7701(a)(30) of the Code.  “US Revolving Loan”, for such period means' \
-    #        ' as defined in Section 2.1. For purposes of this definition, the term “Material Acquisition” means ' \
-    #        'any acquisition or series of related acquisitions by the Company or any Subsidiary that ' \
-    #        '(A) constitutes a Permitted Acquisition. “US Subsidiary Guarantors”: the Wholly-Owned ' \
-    #        'Domestic Subsidiaries of the Parent Borrower. “US Swingline Loan”: as defined in Section 2.5(a). '
-    # res = re.split(r'(?<=\.)([\s]*?“.+?”.*?(?:mean|:)+?.*?\.[\s]+?)', para)
-    # # res2 = re.match(r'^(“.+?”.{0,40}?(?:mean|:)+?.*?)', para)
-    # # res = re.split(r'[\.]', para)
-    # res = [i for i in res if i]
-    # result = []
-    # if res:
-    #     print(res)
-    #     # print(res[::2])
+
+    ori_data2 = read_annotation(filename=r'data/batch_two.xlsx', sheet_name='Sheet1')
+    ext2 = Paragraph_Extract(ori_data2, Train=False)
+    start = time.time()
+    ext2.deal(input_path=r'data/txt_set/', output_path=r'data/adjust_txt/')
+    end = time.time()
+    print('time: {} s'.format(end - start))
+
+    ori_data3 = read_annotation(filename=r'data/batch_test.xlsx', sheet_name='Sheet1')
+    ext3 = Paragraph_Extract(ori_data3, Train=False)
+    start = time.time()
+    ext3.deal(input_path=r'data/test_txt_set/', output_path=r'data/test_adjust_txt/')
+    # filename = 'data/txt_set/1361658_95012310030498_2.txt'
+    # out_filename = 'data/adjust_txt/1361658_95012310030498_2.txt'
+    # if os.path.isfile(filename):
+    #     goal_para, nest = ext.goal_locate(filename)
+    #     ext.to_txt(goal_para, out_filename)
+    #     # row['nest'] = 1 if nest else 0
+    #     print("{} is dealed.".format(filename))
     # else:
-    #     print('error')
+    #     print("ERROR! File {} is not accessible.".format(filename))
+    end = time.time()
+    print('time: {} s'.format(end - start))
+    # time: 29.095494270324707 s (only batch one);  time: 51.8917932510376 s (all data);
+    # time: 21.19935655593872 s(test_set)
 
     pass

@@ -42,7 +42,7 @@ def get_csv_logger(log_file_name,
     """
     logger = logging.getLogger(log_file_name)
     logger.setLevel(log_level)
-    file_handler = logging.FileHandler(log_file_name, 'w+')
+    file_handler = logging.FileHandler(log_file_name, mode='w+')
     formatter = logging.Formatter(log_format)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)

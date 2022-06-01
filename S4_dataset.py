@@ -79,13 +79,13 @@ class Data:
                 label_list.append(eval(one[1]))
 
                 if eval(one[1]) != [0] * division.num_classes:
-                    for _ in range(9):
+                    for _ in range(4):
                         sent_list.append(self.tokenizer.tokenize(one[0]))
                         label_list.append(eval(one[1]))
 
         dataset = self._convert_sentence_to_bert_dataset(sent_list, label_list)
 
-        return dataset
+        return dataset, label_list
 
     def load_train_and_valid_files(self,
                                    train_file, train_sheet, train_txt,):
@@ -99,7 +99,7 @@ class Data:
             all are torch.utils.data.TensorDataset
         """
         print('Loading train records for train...')
-        mydataset = self.load_file(train_file, sheet_name=train_sheet, txt_path=train_txt)
+        mydataset, labels = self.load_file(train_file, sheet_name=train_sheet, txt_path=train_txt)
         train_set, valid_set = self.dataset_split(mydataset)
         print(len(train_set), 'train records loaded.', len(valid_set), 'valid records loaded.')
 

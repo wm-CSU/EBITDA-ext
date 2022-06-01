@@ -14,9 +14,11 @@ from types import SimpleNamespace
 
 # import fire
 import pandas as pd
+import numpy as np
 import argparse
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data.sampler import WeightedRandomSampler
 
 from S4_dataset import Data
 from S5_model import BertForClassification
@@ -46,7 +48,7 @@ def main(config_file='config/bert_config.json',
     data = Data(vocab_file=os.path.join(config.model_path, 'vocab.txt'),
                 max_seq_len=config.max_seq_len)
     datasets = data.load_train_and_valid_files(
-        train_file='data/batch_one.xlsx', train_sheet='Sheet1', train_txt='data/sent_multi_label/',
+        train_file=config.train_file, train_sheet=config.train_sheet, train_txt=config.train_txt,
     )
     train_set, valid_set_train = datasets
 
@@ -56,9 +58,16 @@ def main(config_file='config/bert_config.json',
     else:
         device = torch.device('cpu')
 
+    # with WeightedRandomSampler
+    target = train_set[:][-1]
+    class_sample_counts = target.sum(axis=0, keepdims=False, dtype=torch.float)
+    weights = 1. / class_sample_counts
+    mid = np.array([(weights * t).sum(axis=0, dtype=torch.float) for t in target])
+    samples_weights = np.where(mid == 0., 0.001, mid)
+    sampler = WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
     data_loader = {
         'train': DataLoader(
-            train_set, batch_size=config.batch_size, shuffle=True),
+            train_set, sampler=sampler, batch_size=config.batch_size, shuffle=False),
         'valid_train': DataLoader(
             valid_set_train, batch_size=config.batch_size, shuffle=False),
     }
@@ -75,25 +84,25 @@ def main(config_file='config/bert_config.json',
         # 4. Save model
         torch.save(best_model_state_dict,
                    os.path.join(config.model_path, 'model.bin'))
-    else:
-        # 5. evaluate only
-        model = load_torch_model(
-            model,
-            model_path=os.path.join(config.model_path, config.experiment_name, config.model_type + '-best_model.bin'),
-            multi_gpu=False
-        )
 
-        pred_tool = Prediction(vocab_file=os.path.join(config.model_path, 'vocab.txt'),
-                               max_seq_len=config.max_seq_len,
-                               test_file='data/test.xlsx',
-                               test_sheet='Sheet1',
-                               test_txt='data/test_adjust_txt/',
-                               # test_file='data/batch_two_for_test.xlsx', test_sheet='Sheet1',
-                               # test_txt='data/adjust_txt/',
-                               )
-        pred_tool.evaluate_for_all(model=model, device=device,
-                                   to_file='data/prediction-with mc.xlsx', to_sheet='Sheet1',
-                                   multi_class=True)
+    # 5. evaluate
+    model = load_torch_model(
+        model,
+        model_path=os.path.join(config.model_path, config.experiment_name, config.model_type + '-best_model.bin'),
+        multi_gpu=False
+    )
+
+    pred_tool = Prediction(vocab_file=os.path.join(config.model_path, 'vocab.txt'),
+                           max_seq_len=config.max_seq_len,
+                           test_file=config.test_file,
+                           test_sheet=config.test_sheet,
+                           test_txt=config.test_txt,
+                           # test_file='data/batch_two_for_test.xlsx', test_sheet='Sheet1',
+                           # test_txt='data/adjust_txt/',
+                           )
+    pred_tool.evaluate_for_all(model=model, device=device,
+                               to_file=config.test_to_file, to_sheet=config.test_to_sheet,
+                               multi_class=True)
 
 
 if __name__ == '__main__':
@@ -107,5 +116,5 @@ if __name__ == '__main__':
         help='used for distributed parallel')
     args = parser.parse_args()
 
-    main(args.config_file, need_train=False, ReTrain=True)
+    main(args.config_file, need_train=True, ReTrain=True)
     # fire.Fire(main)
