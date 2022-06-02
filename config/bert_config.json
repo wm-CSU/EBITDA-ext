@@ -5,24 +5,29 @@
   "last_model_path": "model/bert-base-uncased/",
   "log_path": "log/",
 
-  "train_file_path": "data/train.csv",
-  "valid_file_path": "data/valid.csv",
+  "train_file": "data/train.xlsx",
+  "train_sheet": "Sheet1",
+  "train_txt": "data/sent_multi_label/",
+  "test_file": "data/batch_test_for_test.xlsx",
+  "test_sheet": "Sheet1",
+  "test_txt": "data/test_adjust_txt/",
+  "test_to_file": "data/prediction-with improved_data.xlsx",
+  "test_to_sheet": "Sheet1",
 
   "batch_size": 8,
   "multi_gpu": false,
   "use_whitening": false,
 
-  "bert_model_path": "../transformers_PTM/bert-base-uncased/",
   "pooling": "first-last-avg",
   "hidden_size": 768,
   "num_classes": 19,
   "dropout": 0.01,
 
   "lr": 2e-5,
-  "num_epoch": 100,
+  "num_epoch": 150,
   "warmup_ratio": 0.05,
   "gradient_accumulation_steps": 1,
   "max_grad_norm": 1e-3,
 
-  "experiment_name": "BERT-data1-multi_class"
+  "experiment_name": "BERT-all_data_improved-with_resampling-2"
 }

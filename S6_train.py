@@ -9,19 +9,18 @@ Usage:
         --config_file 'config/bert_config.json'
 """
 import os
+
 os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 import warnings
+
 warnings.filterwarnings('ignore')  # “error”, “ignore”, “always”, “default”, “module” or “once”
 
 from typing import Dict, List
-import argparse
-import json
+import numpy as np
 import os
-import time
 from copy import deepcopy
-from types import SimpleNamespace
 
 import torch
 from torch import nn
@@ -31,8 +30,6 @@ from tqdm import tqdm, trange
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from transformers.optimization import (
     AdamW, get_linear_schedule_with_warmup, get_constant_schedule)
-
-from S7_evaluate import calculate_accuracy_f1
 
 from utils import get_csv_logger
 from tools.pytorchtools import EarlyStopping
@@ -70,7 +67,7 @@ class Trainer:
         self.config.num_training_steps = config.num_epoch * (len(data_loader['train']) // config.batch_size)
         self.optimizer = self._get_optimizer()
         self.scheduler = self._get_scheduler()
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = nn.BCELoss()
         # self.writer = SummaryWriter()
 
     def _get_optimizer(self):
@@ -149,19 +146,26 @@ class Trainer:
         """
         # Evaluate model for train and valid set
         predictions, labels = self._evaluate(data_loader=self.data_loader['train'])
-        # train_acc, train_f1 = calculate_accuracy_f1(labels, predictions)  # one-class
-        train_acc, train_f1 = self._compute_metrics(labels=labels, preds=predictions, )  # multi-class
+        train_result = self._compute_metrics(labels=labels, preds=predictions, )  # multi-class
         valid_predictions, valid_labels = self._evaluate(data_loader=self.data_loader['valid_train'])
-        # valid_acc, valid_f1 = calculate_accuracy_f1(valid_labels, valid_predictions)  # one-class
-        valid_acc, valid_f1 = self._compute_metrics(labels=valid_labels, preds=valid_predictions, )  # multi-class
+        valid_result = self._compute_metrics(labels=valid_labels, preds=valid_predictions, )  # multi-class
+
         # Update tqdm description for command line
         tqdm_obj.set_description(
-            'Epoch: {:d}, train_acc: {:.6f}, train_f1: {:.6f}, '
-            'valid_acc: {:.6f}, valid_f1: {:.6f}, '.format(
-                epoch, train_acc, train_f1, valid_acc, valid_f1))
+            'Epoch: {:d}, train: {{acc: {:.6f}, precision: {:.6f}, recall: {:.6f}, f1: {:.6f}}} '
+            'valid: {{acc: {:.6f}, precision: {:.6f}, recall: {:.6f}, f1: {:.6f}}}'.format(
+                epoch, train_result['accuracy'], train_result['precision'], train_result['recall'], train_result['f1'],
+                valid_result['accuracy'], valid_result['precision'], valid_result['recall'], valid_result['f1'])
+        )
         # Logging
-        logger.info(','.join([str(epoch)] + [str(train_acc), str(train_f1), str(valid_acc), str(valid_f1)]))
-        return train_acc, train_f1, valid_acc, valid_f1
+        logger.info(','.join(
+            [str(epoch)] +
+            [str(k) + ': ' + str(format(v, '.6f')) for k, v in train_result.items() if k != 'subclass_confusion_matrix']
+            + [str(k) + ': ' + str(format(v, '.6f')) for k, v in valid_result.items() if
+               k != 'subclass_confusion_matrix'] +
+            [''.join(np.array2string(valid_result['subclass_confusion_matrix']).splitlines())])
+        )
+        return train_result, valid_result
 
     def save_model(self, filename):
         """Save model to file.
@@ -180,7 +184,9 @@ class Trainer:
         epoch_logger = get_csv_logger(
             os.path.join(self.config.log_path,
                          self.config.experiment_name + '-epoch.csv'),
-            title='epoch,train_acc,train_f1,valid_acc,valid_f1',
+            title='epoch, train_acc, train_precision, train_recall, train_f1_micro, train_f1_macro, train_f1, '
+                  'valid_acc, valid_precision, valid_recall, valid_f1_micro, valid_f1_macro, valid_f1, '
+                  'valid_subclass_confusion_matrix',
             log_format='%(asctime)s - %(name)s - %(message)s')
         step_logger = get_csv_logger(
             os.path.join(self.config.log_path,
@@ -211,7 +217,7 @@ class Trainer:
 
         best_model_state_dict = None
         progress_bar = trange(self.config.num_epoch - start_epoch, desc='Epoch', ncols=160)
-        self.earlystop = EarlyStopping(patience=5, verbose=True)
+        self.earlystop = EarlyStopping(patience=3, verbose=True)
         self._epoch_evaluate_update_description_log(
             tqdm_obj=progress_bar, logger=epoch_logger, epoch=0)
 
@@ -220,15 +226,13 @@ class Trainer:
             self.model.train()
             train_loss_sum = 0
             try:
-                with tqdm(self.data_loader['train'], desc='step: ', ascii=False, ncols=80, position=0) as tqdm_obj:
+                with tqdm(self.data_loader['train'], desc='step: ', ascii=False, ncols=140, position=0) as tqdm_obj:
                     for step, batch in enumerate(tqdm_obj):
                         batch = tuple(t.to(self.device) for t in batch)
                         logits, _ = self.model(*batch[:-1])  # the last one is label
-                        # # origin one-class
-                        # loss = self.criterion(logits, batch[-1])
                         # try multi-class
                         predictions = nn.Sigmoid()(logits)
-                        loss = nn.BCELoss()(predictions.float(), batch[-1].float())
+                        loss = self.criterion(predictions.float(), batch[-1].float())
                         # loss = nn.BCEWithLogitsLoss()(predictions, true_labels.to(self.device).float())
 
                         train_loss_sum += loss.item()
@@ -242,31 +246,28 @@ class Trainer:
                             self.optimizer.step()
                             self.scheduler.step()
                             self.optimizer.zero_grad()
-                            step_logger.info(str(self.steps_left) + ',' + str(loss.item()))
+                            step_logger.info(str(self.steps_left) + ', ' + str(loss.item()))
                         tqdm_obj.update(1)
             except KeyboardInterrupt:
                 tqdm_obj.close()
                 raise
             tqdm_obj.close()
             progress_bar.update(1)
-            results = self._epoch_evaluate_update_description_log(
+            train_result, valid_result = self._epoch_evaluate_update_description_log(
                 tqdm_obj=progress_bar, logger=epoch_logger, epoch=epoch + 1)
-            # 分别保存分步模型，最新模型，最优模型
-            # self.save_model(os.path.join(
-            #     self.config.model_path, self.config.experiment_name,
-            #     self.config.model_type + '-' + str(epoch + 1) + '.bin'))
+            # 分别保存最新模型，最优模型
             torch.save({'model_state_dict': self.model.state_dict(),
                         'epoch': epoch + 1,
                         'optimizer_state_dict': self.optimizer.state_dict(),
-                        'best_f1': results[-1],
+                        'best_f1': valid_result['f1'],
                         }, os.path.join(self.config.model_path, self.config.experiment_name,
                                         self.config.model_type + '-last_model.bin'))
-            if results[-1] > self.best_f1:
+            if valid_result['f1'] > self.best_f1:
                 self.save_model(os.path.join(
                     self.config.model_path, self.config.experiment_name,
                     self.config.model_type + '-best_model.bin'))
                 best_model_state_dict = deepcopy(self.model.state_dict())
-                self.best_f1 = results[-1]
+                self.best_f1 = valid_result['f1']
 
             self.earlystop(train_loss_sum / len(self.data_loader['train']), self.model)
             if self.earlystop.early_stop:
@@ -279,15 +280,17 @@ class Trainer:
         precision, recall, f1_micro, _ = precision_recall_fscore_support(labels, preds, average='micro')
         precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(labels, preds, average='macro')
         acc = accuracy_score(labels, preds)
-        # return {
-        #     'accuracy': acc,
-        #     'precision': precision,
-        #     'recall': recall,
-        #     'f1_micro': f1_micro,
-        #     'f1_macro': f1_macro,
-        #     'f1': (f1_micro + f1_macro) / 2,
-        # }
-        return acc, (f1_micro + f1_macro) / 2
+        from S7_evaluate import subclass_confusion_matrix
+        mcm = subclass_confusion_matrix(targetSrc=labels, predSrc=preds)
+        return {
+            'accuracy': acc,
+            'precision': precision,
+            'recall': recall,
+            'f1_micro': f1_micro,
+            'f1_macro': f1_macro,
+            'f1': (f1_micro + f1_macro) / 2,
+            'subclass_confusion_matrix': mcm,
+        }
 
     @staticmethod
     def load_last_model(model, model_path, optimizer,
@@ -319,4 +322,3 @@ class Trainer:
         best_acc = pretrained_model_dict['best_f1']
 
         return model, optimizer, start_epoch, best_acc
-

@@ -12,7 +12,7 @@ from tqdm import tqdm
 from sklearn import metrics
 import fire
 
-LABELS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+LABELS = ['1', '2', '3', '4', '5', '6', '7', '8', '9',
           '10', '11', '12', '13', '14', '15', '16', '17', '18', '19']
 
 
@@ -42,10 +42,9 @@ def subclass_confusion_matrix(targetSrc, predSrc):
     target = np.array(targetSrc)
     pred = np.array(predSrc)
 
-    mcm1 = multilabel_confusion_matrix(target, pred, labels=LABELS)  # target在前，pred在后
-    # print(mcm1.shape)  # (4,2,2) 说明是3维数组
-    print('mcm1 is: \n', mcm1)  # 每一类的混淆矩阵组成的列表
-    pass
+    mcm1 = multilabel_confusion_matrix(target, pred)  # target在前，pred在后
+    # 返回（19, 2, 2）的数组
+    return mcm1
 
 
 def perf_measure(y_true, y_pred):
@@ -79,7 +78,7 @@ def evaluate(tokenizer, model, data_loader, device, multi_class: bool = False):
     from torch import nn
     model.eval()
     answer_list, sent_list = [], []
-    for batch in tqdm(data_loader, desc='Evaluation', ascii=True, ncols=80, leave=True, total=len(data_loader)):
+    for batch in tqdm(data_loader, desc='Evaluation:', ascii=True, ncols=80, leave=True, total=len(data_loader)):
     # for _, batch in enumerate(data_loader):
         batch = tuple(t.to(device) for t in batch)
         with torch.no_grad():
