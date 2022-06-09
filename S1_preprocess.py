@@ -10,7 +10,8 @@ from utils import read_annotation, move_txt
 
 def Drop_Redundance(data,
                     excel_path: str = r'data/new.xlsx',
-                    sheet_name: str = 'Sheet1'
+                    sheet_name: str = 'Sheet1',
+                    Train: bool = True
                     ):
     '''
     包括：调整sentence keywords名称；未标注数据删除（没有文件）；重复数据删除（相同文件）；
@@ -20,7 +21,7 @@ def Drop_Redundance(data,
     # print(data.columns, data.index)
     # 调整列名
     for i in range(len(data.columns.values)):
-        if 'sentence' in data.columns[i]:
+        if 'sentence' in data.columns[i] or 'Sentence' in data.columns[i]:
             data.rename(columns={data.columns[i]: data.columns[i - 1] + '_sentence'}, inplace=True)
         if 'keyword' in data.columns[i]:
             data.rename(columns={data.columns[i]: data.columns[i - 2] + '_keywords'}, inplace=True)
@@ -47,8 +48,9 @@ def Drop_Redundance(data,
         'acct_change_gain', 'acct_change_gain_sentence',
     ]
     data = data[use_col]
-    # 未标注数据删除
-    data.dropna(axis=0, thresh=19, inplace=True)  # 57/3=19 至少应有19个元素非空
+    if Train:
+        # 未标注数据删除
+        data.dropna(axis=0, thresh=19, inplace=True)  # 57/3=19 至少应有19个元素非空
     # 重复数据删除(默认保留第一条)
     data.dropna(axis=0, subset=['file_name'], inplace=True)
     data.drop_duplicates(subset=['file_name'], inplace=True)
@@ -61,7 +63,7 @@ def Drop_Redundance(data,
 def batch_move(data, ori_path, new_path):
     for index, row in data.iterrows():
         ori_file = os.path.join(ori_path, index.split('_')[0], 'txt', index + '.txt')
-        # print(ori_file)
+        print(ori_file)
         move_txt(ori_file, new_path)
 
     return
@@ -83,5 +85,5 @@ if __name__ == '__main__':
     # merge_data.to_excel('data/merge_data.xlsx')
 
     # 测试数据处理
-    ori_data = read_annotation(filename=r'data/test.xlsx', sheet_name='Sheet1')
-    batch_move(ori_data, 'data/ori_txt', r'data/test_txt_set')
+    ori_data = read_annotation(filename=r'data/test_yqh.xlsx', sheet_name='Sheet1')
+    batch_move(ori_data, r'E:/mycode/_DataSets/会计项目/郁绮虹', r'E:/mycode/EBITDA-Ext/data/test_txt_set')

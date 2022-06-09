@@ -205,6 +205,30 @@ class TestData:
 
         return dataset
 
+    def load_one(self, one_sent, one_label):
+        """带标签测试集读取的傻逼函数，最后一定要删掉.
+
+        Args:
+            file_path: train file
+            sheet_name: sheet name
+            txt_path:
+                If True, txt with 'sentence \t label'
+                Otherwise, txt with paragraph
+
+        Returns:
+            dataset:
+                torch.utils.data.TensorDataset
+                    each record: (input_ids, input_mask, segment_ids, label)
+        """
+        sent_list, labels_list = [], []
+        for sent in one_sent:
+            sent_list.append(self.tokenizer.tokenize(sent))
+            labels_list.append(one_label[sent.strip()])
+
+        dataset = self.datatool._convert_sentence_to_bert_dataset(sent_list, labels_list)
+
+        return dataset, labels_list
+
     def txt2sent(self, filename):
         '''
         copy from Division (S3_sentence_division.py )

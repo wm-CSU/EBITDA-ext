@@ -8,10 +8,10 @@
   "train_file": "data/train.xlsx",
   "train_sheet": "Sheet1",
   "train_txt": "data/sent_multi_label/",
-  "test_file": "data/batch_test_for_test.xlsx",
+  "test_file": "data/test_yqh.xlsx",
   "test_sheet": "Sheet1",
   "test_txt": "data/test_adjust_txt/",
-  "test_to_file": "data/prediction-with improved_data.xlsx",
+  "test_to_file": "result/prediction-for new test-with batch3_improved_data.xlsx",
   "test_to_sheet": "Sheet1",
 
   "batch_size": 8,
@@ -29,5 +29,5 @@
   "gradient_accumulation_steps": 1,
   "max_grad_norm": 1e-3,
 
-  "experiment_name": "BERT-all_data_improved-with_resampling-2"
+  "experiment_name": "BERT-batch3_data-with_resampling"
 }

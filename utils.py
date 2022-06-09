@@ -42,7 +42,7 @@ def get_csv_logger(log_file_name,
     """
     logger = logging.getLogger(log_file_name)
     logger.setLevel(log_level)
-    file_handler = logging.FileHandler(log_file_name, mode='w+')
+    file_handler = logging.FileHandler(log_file_name, mode='a')
     formatter = logging.Formatter(log_format)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
@@ -113,7 +113,7 @@ def move_txt(soure_file, dirname):
             new_file_abspath = os.path.join(dirname, ('(%s)%s' % ((max(ref_out) + 1), file_suffix)).join(
                 file_name.split('%s' % file_suffix)))
             shutil.move(soure_file, new_file_abspath)
-        print(soure_file)
+        print(new_file_abspath)
 
     except Exception as e:
         print('err', e)

@@ -159,10 +159,10 @@ class Trainer:
         )
         # Logging
         logger.info(','.join(
-            [str(epoch)] +
+            [str(epoch)] + ['train: '] +
             [str(k) + ': ' + str(format(v, '.6f')) for k, v in train_result.items() if k != 'subclass_confusion_matrix']
-            + [str(k) + ': ' + str(format(v, '.6f')) for k, v in valid_result.items() if
-               k != 'subclass_confusion_matrix'] +
+            + ['valid: '] + [str(k) + ': ' + str(format(v, '.6f')) for k, v in valid_result.items() if
+                            k != 'subclass_confusion_matrix'] +
             [''.join(np.array2string(valid_result['subclass_confusion_matrix']).splitlines())])
         )
         return train_result, valid_result
@@ -216,7 +216,7 @@ class Trainer:
             self.model = torch.nn.DataParallel(self.model)
 
         best_model_state_dict = None
-        progress_bar = trange(self.config.num_epoch - start_epoch, desc='Epoch', ncols=160)
+        progress_bar = trange(self.config.num_epoch - start_epoch, desc='Epoch', ncols=220)
         self.earlystop = EarlyStopping(patience=3, verbose=True)
         self._epoch_evaluate_update_description_log(
             tqdm_obj=progress_bar, logger=epoch_logger, epoch=0)

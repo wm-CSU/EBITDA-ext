@@ -298,24 +298,24 @@ class Paragraph_Extract:
 
 
 if __name__ == '__main__':
-    ori_data1 = read_annotation(filename=r'data/batch_one.xlsx', sheet_name='Sheet1')
-    ext1 = Paragraph_Extract(ori_data1, Train=False)
-    start = time.time()
-    ext1.deal(input_path=r'data/txt_set/', output_path=r'data/adjust_txt/')
-    end = time.time()
-    print('time: {} s'.format(end - start))
+    # ori_data1 = read_annotation(filename=r'data/batch_one.xlsx', sheet_name='Sheet1')
+    # ext1 = Paragraph_Extract(ori_data1, Train=False)
+    # start = time.time()
+    # ext1.deal(input_path=r'data/txt_set/', output_path=r'data/adjust_txt/')
+    # end = time.time()
+    # print('time: {} s'.format(end - start))
+    #
+    # ori_data2 = read_annotation(filename=r'data/batch_two.xlsx', sheet_name='Sheet1')
+    # ext2 = Paragraph_Extract(ori_data2, Train=False)
+    # start = time.time()
+    # ext2.deal(input_path=r'data/txt_set/', output_path=r'data/adjust_txt/')
+    # end = time.time()
+    # print('time: {} s'.format(end - start))
 
-    ori_data2 = read_annotation(filename=r'data/batch_two.xlsx', sheet_name='Sheet1')
-    ext2 = Paragraph_Extract(ori_data2, Train=False)
-    start = time.time()
-    ext2.deal(input_path=r'data/txt_set/', output_path=r'data/adjust_txt/')
-    end = time.time()
-    print('time: {} s'.format(end - start))
-
-    ori_data3 = read_annotation(filename=r'data/batch_test.xlsx', sheet_name='Sheet1')
+    ori_data3 = read_annotation(filename=r'data/test_yqh.xlsx', sheet_name='Sheet1')
     ext3 = Paragraph_Extract(ori_data3, Train=False)
     start = time.time()
-    ext3.deal(input_path=r'data/test_txt_set/', output_path=r'data/test_adjust_txt/')
+    ext3.deal(input_path=r'data/test_txt/', output_path=r'data/test_adjust_txt/')
     # filename = 'data/txt_set/1361658_95012310030498_2.txt'
     # out_filename = 'data/adjust_txt/1361658_95012310030498_2.txt'
     # if os.path.isfile(filename):

@@ -91,7 +91,13 @@ def main(config_file='config/bert_config.json',
         model_path=os.path.join(config.model_path, config.experiment_name, config.model_type + '-best_model.bin'),
         multi_gpu=False
     )
-
+    # from S8_predict import PredictionWithlabels
+    # pred_tool = PredictionWithlabels(vocab_file=os.path.join(config.model_path, 'vocab.txt'),
+    #                                  max_seq_len=config.max_seq_len,
+    #                                  test_file=config.test_file,
+    #                                  test_sheet=config.test_sheet,
+    #                                  test_txt=config.test_txt,
+    #                                  )
     pred_tool = Prediction(vocab_file=os.path.join(config.model_path, 'vocab.txt'),
                            max_seq_len=config.max_seq_len,
                            test_file=config.test_file,
@@ -115,6 +121,5 @@ if __name__ == '__main__':
         '--local_rank', default=0,
         help='used for distributed parallel')
     args = parser.parse_args()
-
     main(args.config_file, need_train=True, ReTrain=True)
     # fire.Fire(main)
