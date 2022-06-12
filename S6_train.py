@@ -126,7 +126,7 @@ class Trainer:
             labels.extend(batch[-1].detach().cpu().numpy().tolist())
             # answer_list.extend(torch.argmax(logits, dim=1).detach().cpu().numpy().tolist())  # single-class
             predictions = nn.Sigmoid()(logits)
-            compute_pred = [[1 if one > 0.90 else 0 for one in row] for row in
+            compute_pred = [[1 if one > 0.60 else 0 for one in row] for row in
                             predictions.detach().cpu().numpy().tolist()]
             answer_list.extend(compute_pred)  # multi-class
         # return [str(x) for x in answer_list], [str(x) for x in labels]
@@ -159,11 +159,11 @@ class Trainer:
         )
         # Logging
         logger.info(','.join(
-            [str(epoch)] + ['train: '] +
+            [str(epoch)] + ['\n    train: '] +
             [str(k) + ': ' + str(format(v, '.6f')) for k, v in train_result.items() if k != 'subclass_confusion_matrix']
-            + ['valid: '] + [str(k) + ': ' + str(format(v, '.6f')) for k, v in valid_result.items() if
-                            k != 'subclass_confusion_matrix'] +
-            [''.join(np.array2string(valid_result['subclass_confusion_matrix']).splitlines())])
+            + ['\n    valid: '] + [str(k) + ': ' + str(format(v, '.6f')) for k, v in valid_result.items() if
+                            k != 'subclass_confusion_matrix'] + ['\n    '] +
+            [''.join(np.array2string(valid_result['subclass_confusion_matrix']).splitlines())] + ['\n'])
         )
         return train_result, valid_result
 
@@ -187,13 +187,12 @@ class Trainer:
             title='epoch, train_acc, train_precision, train_recall, train_f1_micro, train_f1_macro, train_f1, '
                   'valid_acc, valid_precision, valid_recall, valid_f1_micro, valid_f1_macro, valid_f1, '
                   'valid_subclass_confusion_matrix',
-            log_format='%(asctime)s - %(name)s - %(message)s')
+            log_format='%(asctime)s - %(message)s')
         step_logger = get_csv_logger(
             os.path.join(self.config.log_path,
                          self.config.experiment_name + '-step.csv'),
             title='step,loss',
-            log_format='%(asctime)s - %(name)s - %(message)s'
-        )
+            log_format='%(asctime)s - %(message)s')
 
         if ReTrain:  # 读入最新模型
             temporary = self.load_last_model(model=self.model,

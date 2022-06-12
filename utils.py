@@ -4,11 +4,13 @@ Author: Min Wang; wangmin0918@csu.edu.cn
 """
 import logging
 import pandas as pd
+import numpy as np
 import os
 import re
 import shutil
-from collections import OrderedDict
+from collections import OrderedDict, Counter
 import torch
+import torch.nn.functional as F
 
 
 def get_path(path):
@@ -158,3 +160,39 @@ def find_lcsubstr(s1, s2):
                     mmax = m[i + 1][j + 1]
                     p = i + 1
     return s1[p - mmax:p], mmax  # 返回最长子串及其长度
+
+
+def get_label_cooccurance_matrix(labels):
+    """
+    get label Co-occurance matrix.
+    :param labels: dataset[-1] type:Tensor
+    :return:
+    """
+    class_label_counts = labels.sum(axis=0, keepdims=False, dtype=torch.int)
+    label_number = labels.shape[1]
+    co_mat = np.zeros((label_number, label_number), dtype=int)
+    co_mat_normalization = np.zeros((label_number, label_number), dtype=float)
+    for one in labels:
+        label = one.cpu().numpy().tolist()
+        if Counter(label)[1] > 1:
+            index = [i for i, x in enumerate(label) if x == 1]
+            for i in range(len(index)):
+                for j in range(i, len(index)):
+                    co_mat[index[i], index[j]] += 1  # 得到的矩阵为上三角矩阵，最后记得复制到下三角即可
+        else:
+            continue
+
+    for a in range(label_number):
+        for b in range(a + 1, label_number):
+            co_mat[b, a] = co_mat[a, b]
+        co_mat[a, a] += class_label_counts[a]
+
+        co_matSum = np.sum(co_mat[a, :])
+        co_mat_normalization[a, :] = co_mat[a, :] / co_matSum
+    # co_mat 归一化
+    # co_matSum = np.sum(co_mat, axis=1)
+    # matMax, matMin = np.max(co_mat, axis=0), np.min(co_mat, axis=0)
+    # co_mat_normalization = (co_mat - matMin) / (matMax - matMin)
+    # co_mat_normalization = F.softmax(torch.Tensor(co_mat), dim=1)
+
+    return co_mat_normalization

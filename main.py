@@ -1,11 +1,7 @@
-"""Test model for SMP-CAIL2021-ArgumentationUnderstanding Task1.1.
+"""Test model for multi label classification.
 
-Author: Yixu GAO yxgao19@fudan.edu.cn
+Author: wangmin0918@csu.edu.cn
 
-Usage:
-    python main.py --model_config 'config/bert_config.json' \
-                   --in_file 'data/SMP-CAIL2021-test1.csv' \
-                   --out_file 'bert-submission-test-1.csv'
 """
 
 import json
@@ -24,7 +20,7 @@ from S4_dataset import Data
 from S5_model import BertForClassification
 from S6_train import Trainer
 from S8_predict import Prediction
-from utils import load_torch_model, get_path
+from utils import load_torch_model, get_path, get_label_cooccurance_matrix
 
 LABELS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
           '10', '11', '12', '13', '14', '15', '16', '17', '18', '19']
@@ -72,6 +68,8 @@ def main(config_file='config/bert_config.json',
             valid_set_train, batch_size=config.batch_size, shuffle=False),
     }
 
+    config.labels_co_mat = torch.Tensor(get_label_cooccurance_matrix(train_set[:][-1])).to(device)
+
     # 2. Build model
     model = BertForClassification(config)
     model.to(device)
@@ -91,21 +89,21 @@ def main(config_file='config/bert_config.json',
         model_path=os.path.join(config.model_path, config.experiment_name, config.model_type + '-best_model.bin'),
         multi_gpu=False
     )
-    # from S8_predict import PredictionWithlabels
-    # pred_tool = PredictionWithlabels(vocab_file=os.path.join(config.model_path, 'vocab.txt'),
-    #                                  max_seq_len=config.max_seq_len,
-    #                                  test_file=config.test_file,
-    #                                  test_sheet=config.test_sheet,
-    #                                  test_txt=config.test_txt,
-    #                                  )
-    pred_tool = Prediction(vocab_file=os.path.join(config.model_path, 'vocab.txt'),
-                           max_seq_len=config.max_seq_len,
-                           test_file=config.test_file,
-                           test_sheet=config.test_sheet,
-                           test_txt=config.test_txt,
-                           # test_file='data/batch_two_for_test.xlsx', test_sheet='Sheet1',
-                           # test_txt='data/adjust_txt/',
-                           )
+    from S8_predict import PredictionWithlabels
+    pred_tool = PredictionWithlabels(vocab_file=os.path.join(config.model_path, 'vocab.txt'),
+                                     max_seq_len=config.max_seq_len,
+                                     test_file=config.test_file,
+                                     test_sheet=config.test_sheet,
+                                     test_txt=config.test_txt,
+                                     )
+    # pred_tool = Prediction(vocab_file=os.path.join(config.model_path, 'vocab.txt'),
+    #                        max_seq_len=config.max_seq_len,
+    #                        test_file=config.test_file,
+    #                        test_sheet=config.test_sheet,
+    #                        test_txt=config.test_txt,
+    #                        # test_file='data/batch_two_for_test.xlsx', test_sheet='Sheet1',
+    #                        # test_txt='data/adjust_txt/',
+    #                        )
     pred_tool.evaluate_for_all(model=model, device=device,
                                to_file=config.test_to_file, to_sheet=config.test_to_sheet,
                                multi_class=True)
@@ -122,4 +120,5 @@ if __name__ == '__main__':
         help='used for distributed parallel')
     args = parser.parse_args()
     main(args.config_file, need_train=True, ReTrain=True)
+    # print(torch.nonzero(torch.tensor([0,0,0,0,0,0]), as_tuple=True))
     # fire.Fire(main)

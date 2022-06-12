@@ -8,10 +8,10 @@
   "train_file": "data/train.xlsx",
   "train_sheet": "Sheet1",
   "train_txt": "data/sent_multi_label/",
-  "test_file": "data/test_yqh.xlsx",
+  "test_file": "data/test_yqh_2.xlsx",
   "test_sheet": "Sheet1",
   "test_txt": "data/test_adjust_txt/",
-  "test_to_file": "result/prediction-for new test-with batch3_improved_data.xlsx",
+  "test_to_file": "result/prediction-for yqh-with_resampling_comat_lstm-analysis.xlsx",
   "test_to_sheet": "Sheet1",
 
   "batch_size": 8,
@@ -22,12 +22,13 @@
   "hidden_size": 768,
   "num_classes": 19,
   "dropout": 0.01,
+  "bilstm_num_layers": 1,
 
   "lr": 2e-5,
-  "num_epoch": 150,
+  "num_epoch": 100,
   "warmup_ratio": 0.05,
   "gradient_accumulation_steps": 1,
   "max_grad_norm": 1e-3,
 
-  "experiment_name": "BERT-batch3_data-with_resampling"
+  "experiment_name": "BERT-batch3_data-with_resampling_comat_lstm"
 }

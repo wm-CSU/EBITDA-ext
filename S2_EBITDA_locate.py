@@ -184,8 +184,8 @@ class Paragraph_Extract:
         ori_txt = f.readlines()
         paragraph = self.text2paragraph(ori_txt)
         # 构造正则表达式的pattern
-        ebitda = re.compile(r'EBIT[\s\S]{0,50}?(?:mean|:)')
-        net_income_place = re.compile(r'Net Income[\s\S]{0,50}?(?:mean|:)')
+        ebitda = re.compile(r'^[\s\S]{0,200}EBIT[\s\S]{0,50}?(?:mean|:|\.)')
+        net_income_place = re.compile(r'^[\s\S]{0,200}Net Income[\s\S]{0,50}?(?:mean|:|\.)')
 
         # 逐段遍历找到段落
         EBITDA_exist, NI_exist, cont = False, False, False  # 判定 EBITDA 中是否嵌套使用了 Net Income, 冒号后续是否追加
@@ -223,7 +223,6 @@ class Paragraph_Extract:
     def text2paragraph(self, text):
         '''
         txt 文本转段落 （策略：空行分段  空行是段落的划分）
-        需解决: 段落跨页 (例子: 'data/txt_set/712034_91384912000187_2.txt')
         :param text: [str]
         :return: paragraph: [str]
         '''
@@ -234,13 +233,13 @@ class Paragraph_Extract:
         Page_continue, Segment = False, False
         para = ''
         punctuation = re.compile(r'.*[.!?]$')
-        page_number = re.compile(r'([0-9]+)|(- [0-9]+ -)|(-[0-9]+-)|(Page [0-9]+)')
+        page_number = re.compile(r'^([0-9]+)$|^(- [0-9]+ -)$|^(-[0-9]+-)$|^(Page [0-9]+)$')
         text = [line for line in text if not page_number.match(line.strip())]
         for line in text:
-            if line.strip() == '' or page_number.match(line.strip()):
+            # if line.strip() == '' and punctuation.match(para):
+            if line.strip() == '':
+            # if line.strip() == '' or page_number.match(line.strip()):
                 Segment = True
-                # Page_continue = False if punctuation.match(para) else True
-                # continue
             else:
                 if Segment and not Page_continue:
                     paralist.append(para.replace('\xa0', ' '))
@@ -262,10 +261,10 @@ class Paragraph_Extract:
             Page_continue = False if punctuation.match(para) else True
 
         paralist.append(para)
-        # print(len(paralist))
-        # if len(paralist) < 300:
-        #     paralist = self.post_processing(paralist)
-        paralist = self.post_processing(paralist)
+
+        if len(paralist) < 300:
+            paralist = self.post_processing(paralist)
+
         return paralist
 
     def post_processing(self, paragraph):
@@ -279,7 +278,7 @@ class Paragraph_Extract:
         post_para = []
         for para in paragraph:
             # res = re.split(r'(?<=\.)([\s]*?“.+?”.*?(?:mean|:)+?.*?\.[\s]*?)(?=“)', para)
-            res = re.split(r'(?<=\.)([\s]*?“.+?”.*?\.[\s]*?)(?=“)', para)
+            res = re.split(r'(?<=(\.|:))([\s]*?“.+?”.*?\.[\s]*?)(?=“)', para)
             res = [i for i in res if i]
             if res:
                 post_para.extend(res)
@@ -298,12 +297,12 @@ class Paragraph_Extract:
 
 
 if __name__ == '__main__':
-    # ori_data1 = read_annotation(filename=r'data/batch_one.xlsx', sheet_name='Sheet1')
-    # ext1 = Paragraph_Extract(ori_data1, Train=False)
-    # start = time.time()
-    # ext1.deal(input_path=r'data/txt_set/', output_path=r'data/adjust_txt/')
-    # end = time.time()
-    # print('time: {} s'.format(end - start))
+    ori_data1 = read_annotation(filename=r'data/train.xlsx', sheet_name='Sheet1')
+    ext1 = Paragraph_Extract(ori_data1, Train=False)
+    start = time.time()
+    ext1.deal(input_path=r'data/txt_set/', output_path=r'data/adjust_txt/')
+    end = time.time()
+    print('time: {} s'.format(end - start))
     #
     # ori_data2 = read_annotation(filename=r'data/batch_two.xlsx', sheet_name='Sheet1')
     # ext2 = Paragraph_Extract(ori_data2, Train=False)
@@ -312,15 +311,16 @@ if __name__ == '__main__':
     # end = time.time()
     # print('time: {} s'.format(end - start))
 
-    ori_data3 = read_annotation(filename=r'data/test_yqh.xlsx', sheet_name='Sheet1')
-    ext3 = Paragraph_Extract(ori_data3, Train=False)
-    start = time.time()
-    ext3.deal(input_path=r'data/test_txt/', output_path=r'data/test_adjust_txt/')
-    # filename = 'data/txt_set/1361658_95012310030498_2.txt'
-    # out_filename = 'data/adjust_txt/1361658_95012310030498_2.txt'
+    # ori_data3 = read_annotation(filename=r'data/test_yqh.xlsx', sheet_name='Sheet1')
+    # ext3 = Paragraph_Extract(ori_data3, Train=False)
+    # start = time.time()
+    # ext3.deal(input_path=r'data/test_txt/', output_path=r'data/test_adjust_txt/')
+
+    # filename = 'data/test_txt/1045609_95012311057653_2.txt'
+    # out_filename = 'data/test_adjust_txt/1045609_95012311057653_2.txt'
     # if os.path.isfile(filename):
-    #     goal_para, nest = ext.goal_locate(filename)
-    #     ext.to_txt(goal_para, out_filename)
+    #     goal_para, nest = ext3.goal_locate(filename)
+    #     ext3.to_txt(goal_para, out_filename)
     #     # row['nest'] = 1 if nest else 0
     #     print("{} is dealed.".format(filename))
     # else:

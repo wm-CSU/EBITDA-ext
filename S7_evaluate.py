@@ -88,7 +88,7 @@ def evaluate(tokenizer, model, data_loader, device, multi_class: bool = False):
 
         if multi_class:
             predictions = nn.Sigmoid()(logits)
-            compute_pred = [[1 if one > 0.90 else 0 for one in row] for row in
+            compute_pred = [[1 if one > 0.60 else 0 for one in row] for row in
                             predictions.detach().cpu().numpy().tolist()]
             answer_list.extend(compute_pred)  # multi-class
         else:

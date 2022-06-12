@@ -12,10 +12,13 @@ from S1_preprocess import Drop_Redundance
 
 
 class Excel_analysis:
+    """
+    机器读取结果可视化，用于改进标注数据
+    """
     def __init__(self, data, Train: bool = True):
         self.num_classes = 19
         if Train:
-            self.data = Drop_Redundance(data, excel_path=r'../data/new.xlsx', )  # 原生数据预处理（冗余删除）
+            self.data = Drop_Redundance(data)  # 原生数据预处理（冗余删除）
         else:
             self.data = data
 
