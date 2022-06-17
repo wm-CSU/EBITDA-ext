@@ -4,6 +4,8 @@ Author: Min Wang; wangmin0918@csu.edu.cn
 """
 import os
 import json
+import numpy as np
+import time
 from torch.utils.data import DataLoader
 from utils import read_annotation
 from S1_preprocess import Drop_Redundance
@@ -83,7 +85,7 @@ class Prediction:
                 labels = [k for k, v in self.label_map.items() if v in labels_int]
                 for label in labels:
                     one_data[label.replace('_sentence', '')] = 1
-                    one_data[label] = ' '.join([one_data[label], sent])
+                    one_data[label] = '; '.join([one_data[label], sent])
             else:
                 continue
 
@@ -116,6 +118,7 @@ class PredictionWithlabels:
         # self.data = read_annotation(filename=test_file, sheet_name=test_sheet)
         from S3_sentence_division import Division
         self.division = Division(self.data)
+        self.test_file = test_file
         self.test_txt = test_txt
         self.dataset_tool = TestData(vocab_file, max_seq_len=max_seq_len)
 
@@ -147,12 +150,14 @@ class PredictionWithlabels:
             self.data.loc[index, :] = self.sent_data_align_multi_class(sent, predictions=predictions, one_data=one)
 
         self.data.to_excel(to_file, to_sheet)
-        import numpy as np
-        import time
-        from S7_evaluate import subclass_confusion_matrix
+
+        from S7_evaluate import subclass_confusion_matrix, compute_metrics
         mcm = subclass_confusion_matrix(targetSrc=target_list, predSrc=pred_list)
+        result = compute_metrics(labels=target_list, preds=pred_list)
         with open('result/result.txt', 'a+') as f:
-            f.write('\n' + time.asctime() + '\n')
+            f.write('\n\n\n' + time.asctime() + '   PredictionWithlabels   ' + self.test_file + ' -> ' + to_file + '\n')
+            f.write(str([str(k) + ': ' + str(format(v, '.6f')) for k, v in result.items() if
+                         k != 'subclass_confusion_matrix']) + '\n')
             f.write(''.join(np.array2string(mcm).splitlines()))
         f.close()
 
@@ -172,7 +177,7 @@ class PredictionWithlabels:
             sent_list.extend([tokenizer.decode(x, skip_special_tokens=True) for x in batch[0]])
 
             predictions = nn.Sigmoid()(logits)
-            compute_pred = [[1 if one > 0.60 else 0 for one in row] for row in
+            compute_pred = [[1 if one > 0.90 else 0 for one in row] for row in
                             predictions.detach().cpu().numpy().tolist()]
             answer_list.extend(compute_pred)  # multi-class
 
@@ -195,7 +200,7 @@ class PredictionWithlabels:
                         one_data[label] = ' '.join([str(one_data[label]), '\n\n'])
                     if one_data[label.replace('_sentence', '')] == 0:
                         one_data[label.replace('_sentence', '')] = -1
-                    one_data[label] = ' '.join([str(one_data[label]), sent])
+                    one_data[label] = '; '.join([str(one_data[label]), sent])
             else:
                 continue
 

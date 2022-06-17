@@ -82,6 +82,18 @@ def main(config_file='config/bert_config.json',
         # 4. Save model
         torch.save(best_model_state_dict,
                    os.path.join(config.model_path, 'model.bin'))
+    else:
+        # 3. Valid
+        trainer = Trainer(model=model, data_loader=data_loader,
+                          device=device, config=config)
+        trainer.model, _, _, _ = trainer.load_last_model(model=model,
+                                                         model_path=os.path.join(config.model_path,
+                                                                                 config.experiment_name,
+                                                                                 config.model_type + '-last_model.bin'),
+                                                         optimizer=trainer.optimizer,
+                                                         multi_gpu=False)
+        train_result, valid_result = trainer.evaluate_train_valid()
+        print(train_result, valid_result)
 
     # 5. evaluate
     model = load_torch_model(
@@ -119,6 +131,5 @@ if __name__ == '__main__':
         '--local_rank', default=0,
         help='used for distributed parallel')
     args = parser.parse_args()
-    main(args.config_file, need_train=True, ReTrain=True)
-    # print(torch.nonzero(torch.tensor([0,0,0,0,0,0]), as_tuple=True))
+    main(args.config_file, need_train=False, ReTrain=True)
     # fire.Fire(main)

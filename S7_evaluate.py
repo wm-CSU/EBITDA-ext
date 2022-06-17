@@ -10,6 +10,7 @@ import torch
 
 from tqdm import tqdm
 from sklearn import metrics
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 import fire
 
 LABELS = ['1', '2', '3', '4', '5', '6', '7', '8', '9',
@@ -45,6 +46,22 @@ def subclass_confusion_matrix(targetSrc, predSrc):
     mcm1 = multilabel_confusion_matrix(target, pred)  # target在前，pred在后
     # 返回（19, 2, 2）的数组
     return mcm1
+
+
+def compute_metrics(labels, preds):
+    precision, recall, f1_micro, _ = precision_recall_fscore_support(labels, preds, average='micro')
+    precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(labels, preds, average='macro')
+    acc = accuracy_score(labels, preds)
+    mcm = subclass_confusion_matrix(targetSrc=labels, predSrc=preds)
+    return {
+        'accuracy': acc,
+        'precision': precision,
+        'recall': recall,
+        'f1_micro': f1_micro,
+        'f1_macro': f1_macro,
+        'f1': (f1_micro + f1_macro) / 2,
+        'subclass_confusion_matrix': mcm,
+    }
 
 
 def perf_measure(y_true, y_pred):
@@ -88,7 +105,7 @@ def evaluate(tokenizer, model, data_loader, device, multi_class: bool = False):
 
         if multi_class:
             predictions = nn.Sigmoid()(logits)
-            compute_pred = [[1 if one > 0.60 else 0 for one in row] for row in
+            compute_pred = [[1 if one > 0.90 else 0 for one in row] for row in
                             predictions.detach().cpu().numpy().tolist()]
             answer_list.extend(compute_pred)  # multi-class
         else:

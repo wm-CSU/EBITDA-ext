@@ -91,11 +91,6 @@ class Division:
 
         return label_map
 
-    def sent2txt(self, sent):
-        # 标准答案句换进分句结果中，解决过度划分问题
-        # 最后再解决叭
-        pass
-
     def label2txt(self, label_dict, filename):
         with open(filename, 'w', encoding='utf8') as f:
             for sent, label in label_dict.items():

@@ -9,6 +9,7 @@ Usage:
         --config_file 'config/bert_config.json'
 """
 import os
+import time
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
@@ -126,11 +127,20 @@ class Trainer:
             labels.extend(batch[-1].detach().cpu().numpy().tolist())
             # answer_list.extend(torch.argmax(logits, dim=1).detach().cpu().numpy().tolist())  # single-class
             predictions = nn.Sigmoid()(logits)
-            compute_pred = [[1 if one > 0.60 else 0 for one in row] for row in
+            compute_pred = [[1 if one > 0.90 else 0 for one in row] for row in
                             predictions.detach().cpu().numpy().tolist()]
             answer_list.extend(compute_pred)  # multi-class
         # return [str(x) for x in answer_list], [str(x) for x in labels]
         return answer_list, labels
+
+    def evaluate_train_valid(self):
+        # Evaluate model for train and valid set
+        predictions, labels = self._evaluate(data_loader=self.data_loader['train'])
+        train_result = self._compute_metrics(labels=labels, preds=predictions, )
+        valid_predictions, valid_labels = self._evaluate(data_loader=self.data_loader['valid_train'])
+        valid_result = self._compute_metrics(labels=valid_labels, preds=valid_predictions, )
+
+        return train_result, valid_result
 
     def _epoch_evaluate_update_description_log(
             self, tqdm_obj, logger, epoch):
@@ -144,11 +154,7 @@ class Trainer:
         Return:
             train_acc, train_f1, valid_acc, valid_f1
         """
-        # Evaluate model for train and valid set
-        predictions, labels = self._evaluate(data_loader=self.data_loader['train'])
-        train_result = self._compute_metrics(labels=labels, preds=predictions, )  # multi-class
-        valid_predictions, valid_labels = self._evaluate(data_loader=self.data_loader['valid_train'])
-        valid_result = self._compute_metrics(labels=valid_labels, preds=valid_predictions, )  # multi-class
+        train_result, valid_result = self.evaluate_train_valid()
 
         # Update tqdm description for command line
         tqdm_obj.set_description(
@@ -175,7 +181,7 @@ class Trainer:
         """
         torch.save(self.model.state_dict(), filename)
 
-    def train(self, ReTrain=False):
+    def train(self, ReTrain: bool=False):
         """Train model on train set and evaluate on train and valid set.
 
         Returns:
@@ -202,6 +208,11 @@ class Trainer:
                                              optimizer=self.optimizer,
                                              multi_gpu=False)
             self.model, self.optimizer, start_epoch, self.best_f1 = temporary
+
+            self.save_model(os.path.join(
+                self.config.model_path, self.config.experiment_name,
+                str(time.asctime()) + '-saved_model.bin'))
+
             self.scheduler.last_epoch = start_epoch
             self.steps_left = (self.config.num_epoch - start_epoch) * len(self.data_loader['train'])
         else:
