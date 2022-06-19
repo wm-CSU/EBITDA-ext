@@ -239,7 +239,8 @@ class TestData:
         with open(filename, 'r', encoding='utf8') as f:
             paragraph = f.readlines()
             for para in paragraph:
-                para2sent = self.sent_split(paragraph=para)
+                mid = self.sent_split(paragraph=para)
+                para2sent = self.sent_resplit(paragraph=mid)
                 sentence.extend(para2sent)
         f.close()
 
@@ -261,6 +262,27 @@ class TestData:
         para2sent = [re.sub('\([\s\S]{1,4}\)$', '', sent) for sent in para2sent]
 
         return [one for one in para2sent if len(one) > 10]
+
+    def sent_resplit(self, paragraph):
+        for para in paragraph:
+            if len(para) > 800:  # resplit
+                re_sent = re.split(',|\(.{5,}?\)', para.strip())
+                # 保留分割符号，置于句尾，比如标点符号
+                seg_word = re.findall(',|\(.{5,}?\)', para.strip())
+                seg_word.extend(" ")  # 末尾插入一个空字符串，以保持长度和切割成分相同
+                re_sent = [x + y for x, y in zip(re_sent, seg_word)]  # 顺序可根据需求调换
+                for one in range(len(re_sent) - 1):
+                    if re_sent[one].endswith(')'):
+                        re_sent[one] = re_sent[one] + re_sent[one + 1]
+                        re_sent[one + 1] = ''
+                re_sent = [one for one in re_sent if len(one) > 10]
+
+                paragraph.extend(re_sent)
+                paragraph.remove(para)
+            else:
+                continue
+
+        return paragraph
 
 
 def test_data():

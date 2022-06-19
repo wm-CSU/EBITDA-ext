@@ -6,6 +6,7 @@ Author: Min Wang; wangmin0918@csu.edu.cn
 import os.path
 import re
 import copy
+import numpy as np
 import pandas as pd
 from utils import get_path, read_annotation, find_lcsubstr
 from S1_preprocess import Drop_Redundance
@@ -15,10 +16,11 @@ class Excel_analysis:
     """
     机器读取结果可视化，用于改进标注数据
     """
+
     def __init__(self, data, Train: bool = True):
         self.num_classes = 19
         if Train:
-            self.data = Drop_Redundance(data)  # 原生数据预处理（冗余删除）
+            self.data = Drop_Redundance(data, excel_path=r'../data/new.xlsx', )  # 原生数据预处理（冗余删除）
         else:
             self.data = data
 
@@ -50,6 +52,17 @@ class Excel_analysis:
             self.read_data.insert(col_index, col, '')
             # self.read_data = pd.concat([self.read_data, pd.DataFrame(columns=drop_col)], sort=False)
         self.read_data.fillna('', inplace=True)
+        self.Marking_length_statistics(drop_col)
+
+    def Marking_length_statistics(self, col):
+        # mark = [i for i in self.data[col] if pd.isna(i)==False]
+        mark = []
+        for one in col:
+            mark.extend([i for i in self.data[one] if pd.isna(i) == False])
+        # print(mark)
+        mark_len = [len(i) for i in mark]
+        print('min: {}\nmean: {}\n95 percentile:{}\nmax: {}'.format(
+            np.min(mark_len), np.mean(mark_len), np.percentile(mark_len, 95), np.max(mark_len)))
 
     def deal(self, txtfilepath, tofilepath):
         # labels = []
@@ -113,19 +126,19 @@ class Excel_analysis:
 if __name__ == '__main__':
     ebitda_txt = r'../data/adjust_txt/'
     # 两批数据处理
-    ori_data1 = read_annotation(filename=r'../data/batch_one.xlsx', sheet_name='Sheet1')
+    ori_data1 = read_annotation(filename=r'../data/train.xlsx', sheet_name='Sheet1')
     analysis1 = Excel_analysis(ori_data1)
-    analysis1.deal(txtfilepath=ebitda_txt, tofilepath=r'../data/batch_one_read.xlsx')
+    # analysis1.deal(txtfilepath=ebitda_txt, tofilepath=r'../data/batch_one_read.xlsx')
 
-    ori_data2 = read_annotation(filename=r'../data/batch_two.xlsx', sheet_name='Sheet1')
-    analysis2 = Excel_analysis(ori_data2)
-    analysis2.deal(txtfilepath=ebitda_txt, tofilepath=r'../data/batch_two_read.xlsx')
+    # ori_data2 = read_annotation(filename=r'../data/batch_two.xlsx', sheet_name='Sheet1')
+    # analysis2 = Excel_analysis(ori_data2)
+    # analysis2.deal(txtfilepath=ebitda_txt, tofilepath=r'../data/batch_two_read.xlsx')
 
     # test
     test_ebitda_txt = r'../data/test_adjust_txt/'
-    ori_data3 = read_annotation(filename=r'../data/batch_test.xlsx', sheet_name='Sheet1')
+    ori_data3 = read_annotation(filename=r'../data/test_yqh_with answer.xlsx', sheet_name='Sheet1')
     analysis3 = Excel_analysis(ori_data3)
-    analysis3.deal(txtfilepath=test_ebitda_txt, tofilepath=r'../data/batch_test_read.xlsx')
+    # analysis3.deal(txtfilepath=test_ebitda_txt, tofilepath=r'../data/batch_test_read.xlsx')
     # str1 = ' exclusive of extraordinary items and gains or-losses on sales of assets outside the ordinary course ' \
     #        'of business, in the aggregate arising from the sale，'
     # str2 = ' earnings before interest, taxes on income, depreciation and amortization (exclusive of extraordinary ' \

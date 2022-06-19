@@ -44,7 +44,8 @@ class Division:
         with open(filename, 'r', encoding='utf8') as f:
             paragraph = f.readlines()
             for para in paragraph:
-                para2sent = self.sent_split(paragraph=para)
+                mid = self.sent_split(paragraph=para)
+                para2sent = self.sent_resplit(paragraph=mid)
                 sentence.extend(para2sent)
         f.close()
 
@@ -61,6 +62,27 @@ class Division:
         para2sent = [re.sub('\([\s\S]{1,4}\)$', '', sent) for sent in para2sent]
 
         return [one for one in para2sent if len(one) > 10]
+
+    def sent_resplit(self, paragraph):
+        for para in paragraph:
+            if len(para) > 800:  # resplit
+                re_sent = re.split(',|\(.{5,}?\)', para.strip())
+                # 保留分割符号，置于句尾，比如标点符号
+                seg_word = re.findall(',|\(.{5,}?\)', para.strip())
+                seg_word.extend(" ")  # 末尾插入一个空字符串，以保持长度和切割成分相同
+                re_sent = [x + y for x, y in zip(re_sent, seg_word)]  # 顺序可根据需求调换
+                for one in range(len(re_sent) - 1):
+                    if re_sent[one].endswith(')'):
+                        re_sent[one] = re_sent[one] + re_sent[one + 1]
+                        re_sent[one + 1] = ''
+                re_sent = [one for one in re_sent if len(one) > 10]
+
+                paragraph.extend(re_sent)
+                paragraph.remove(para)
+            else:
+                continue
+
+        return paragraph
 
     def sent_label(self, one_data, one_sent, label_map):
         # 一条数据的sentence与label对应
@@ -111,12 +133,6 @@ if __name__ == '__main__':
     data = ext.deal(input_path=txt_set, output_path=ebitda_txt)
     division = Division(ori_data)
     division.deal(label_map=r'data/label_map.json', txtfilepath=ebitda_txt, labelfilepath=multi_class_sent_txt)
-
-    # ori_data2 = read_annotation(filename=r'data/batch_two.xlsx', sheet_name='Sheet1')
-    # # ext = Paragraph_Extract(ori_data)
-    # # data = ext.deal(input_path=txt_set, output_path=ebitda_txt)
-    # division2 = Division(ori_data2)
-    # division2.deal(label_map=r'data/label_map.json', txtfilepath=ebitda_txt, labelfilepath=multi_class_sent_txt)
 
     # # test
     # multi_class_test_sent_txt = r'data/sent_multi_label'
