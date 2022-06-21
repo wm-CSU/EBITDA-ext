@@ -85,5 +85,5 @@ if __name__ == '__main__':
     # merge_data.to_excel('data/merge_data.xlsx')
 
     # 测试数据处理
-    ori_data = read_annotation(filename=r'data/test_yqh.xlsx', sheet_name='Sheet1')
-    batch_move(ori_data, r'E:/mycode/_DataSets/会计项目/郁绮虹', r'E:/mycode/EBITDA-Ext/data/test_txt_set')
+    ori_data = read_annotation(filename=r'data/test_lqj_with answer.xlsx', sheet_name='Sheet1')
+    batch_move(ori_data, r'E:/mycode/_DataSets/会计项目/林祺婧', r'E:/mycode/EBITDA-Ext/data/test_txt_set')

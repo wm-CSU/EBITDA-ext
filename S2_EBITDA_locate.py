@@ -184,7 +184,7 @@ class Paragraph_Extract:
         ori_txt = f.readlines()
         paragraph = self.text2paragraph(ori_txt)
         # 构造正则表达式的pattern
-        ebitda = re.compile(r'^[\s\S]{0,200}EBIT[\s\S]{0,50}?(?:mean|:|\.)')
+        ebitda = re.compile(r'^[\s\S]{0,200}EBIT[\s\S]{0,50}?(?:mean|:|\.|—)')
         net_income_place = re.compile(r'^[\s\S]{0,200}Net Income[\s\S]{0,50}?(?:mean|:|\.)')
 
         # 逐段遍历找到段落
@@ -233,12 +233,12 @@ class Paragraph_Extract:
         Page_continue, Segment = False, False
         para = ''
         punctuation = re.compile(r'.*[.!?]$')
-        page_number = re.compile(r'^([0-9]+)$|^(- [0-9]+ -)$|^(-[0-9]+-)$|^(Page [0-9]+)$')
+        page_number = re.compile(r'^(.*?[0-9]+)$|^(.*?- [0-9]+ -)$|^(.*?-[0-9]+-)$|^(.*?Page [0-9]+)$')
         text = [line for line in text if not page_number.match(line.strip())]
         for line in text:
             # if line.strip() == '' and punctuation.match(para):
             if line.strip() == '':
-            # if line.strip() == '' or page_number.match(line.strip()):
+                # if line.strip() == '' or page_number.match(line.strip()):
                 Segment = True
             else:
                 if Segment and not Page_continue:
@@ -262,7 +262,7 @@ class Paragraph_Extract:
 
         paralist.append(para)
 
-        if len(paralist) < 300:
+        if len(paralist) < 350 or sum(len(i) > 4000 for i in paralist)>30:
             paralist = self.post_processing(paralist)
 
         return paralist
@@ -278,15 +278,36 @@ class Paragraph_Extract:
         post_para = []
         for para in paragraph:
             # res = re.split(r'(?<=\.)([\s]*?“.+?”.*?(?:mean|:)+?.*?\.[\s]*?)(?=“)', para)
-            res = re.split(r'(?<=(\.|:))([\s]*?“.+?”.*?\.[\s]*?)(?=“)', para)
+            res = re.split(r'(?<=(\.|:))([\s]*?[0-9]*?[\s]*?“.+?”.*?\.[\s]*?[0-9]*?[\s]*?)(?=“)', para)
             res = [i for i in res if i]
             if res:
                 post_para.extend(res)
             else:
-                res2 = re.split(r'(?<=\.)([\s]*?.*?\.[\s]*?)', para)
-                post_para.extend([i for i in res2 if i])
+                res3 = re.split(r'(?<=\.)([\s]*?.*?\.[\s]*?)', para)
+                post_para.extend([i for i in res3 if i])
 
-        post_para = [i for i in post_para if len(i) < 100000]
+        post_para = [i for i in post_para if 10 <= len(i) < 100000]
+
+        if len(paragraph) < 350:
+            post_para = self.twice_post_processing(post_para)
+
+        return post_para
+
+    def twice_post_processing(self, paragraph):
+        # 删去过短的元素
+        paragraph = [x for x in paragraph if len(x) >= 10]
+        post_para = []
+        for para in paragraph:
+            res = re.split(r'(?<=(\.))([\s]*?.*?(?:mean|:).*?\.+?[\s]*?)', para)
+            res = [i for i in res if i]
+            if res:
+                post_para.extend(res)
+            else:
+                res3 = re.split(r'(?<=\.)([\s]*?.*?\.[\s]*?)', para)
+                post_para.extend([i for i in res3 if i])
+
+        post_para = [i for i in post_para if 10 <= len(i) < 100000]
+
         return post_para
 
     def to_txt(self, text, filepath):
@@ -303,25 +324,16 @@ if __name__ == '__main__':
     ext1.deal(input_path=r'data/txt_set/', output_path=r'data/adjust_txt/')
     end = time.time()
     print('time: {} s'.format(end - start))
-    #
-    # ori_data2 = read_annotation(filename=r'data/batch_two.xlsx', sheet_name='Sheet1')
-    # ext2 = Paragraph_Extract(ori_data2, Train=False)
-    # start = time.time()
-    # ext2.deal(input_path=r'data/txt_set/', output_path=r'data/adjust_txt/')
-    # end = time.time()
-    # print('time: {} s'.format(end - start))
 
-    # ori_data3 = read_annotation(filename=r'data/test_yqh.xlsx', sheet_name='Sheet1')
-    # ext3 = Paragraph_Extract(ori_data3, Train=False)
-    # start = time.time()
-    # ext3.deal(input_path=r'data/test_txt/', output_path=r'data/test_adjust_txt/')
-
-    # filename = 'data/test_txt/1045609_95012311057653_2.txt'
-    # out_filename = 'data/test_adjust_txt/1045609_95012311057653_2.txt'
+    ori_data3 = read_annotation(filename=r'data/test_lqj_with answer.xlsx', sheet_name='Sheet1')
+    ext3 = Paragraph_Extract(ori_data3, Train=False)
+    start = time.time()
+    ext3.deal(input_path=r'data/test_txt_set/', output_path=r'data/test_adjust_txt/')
+    # filename = 'data/test_txt_set/909111_90911112000046_3.txt'
+    # out_filename = 'data/test_adjust_txt/909111_90911112000046_3.txt'
     # if os.path.isfile(filename):
     #     goal_para, nest = ext3.goal_locate(filename)
     #     ext3.to_txt(goal_para, out_filename)
-    #     # row['nest'] = 1 if nest else 0
     #     print("{} is dealed.".format(filename))
     # else:
     #     print("ERROR! File {} is not accessible.".format(filename))
@@ -330,4 +342,16 @@ if __name__ == '__main__':
     # time: 29.095494270324707 s (only batch one);  time: 51.8917932510376 s (all data);
     # time: 21.19935655593872 s(test_set)
 
+    test = 'the United States. Average Distribution Availability mean as of any applicable date of a Distribution ' \
+           'and for the thirty-day ' \
+           'period ending as of such date, the thirty-day average of (a) the Borrowers’ Availability plus ' \
+           '(b) all U.S. cash (including U.S. money market investments) of Borrowers that is either (i) pledged' \
+           ' to only to Agent and in which Agent (and no other Person) has a perfected security interest or ' \
+           '(ii) not subject to any Lien. Bank of America mean Bank of America, N.A., a national banking association,' \
+           ' and its successors and assigns.Dominion Account mean a special account established by Borrowers at Bank of ' \
+           'America or another bank acceptable to Agent, over which Agent has control.EBITDA” mean determined on a consolidated basis for Borrowers and ' \
+           'Subsidiaries, net income, calculated before interest.“Bank of America Indemnitees” mean Bank of America and.'
+    res = re.split(r'(?<=(\.))([\s]*?.*?(?:mean|:).*?\.+?[\s]*?)', test)
+    # res = re.split(r'(?<=(\.|:))([\s]*?[0-9]*?[\s]*?“.+?”.*?\.[\s]*?[0-9]*?[\s]*?)(?=“)', test)
+    print(res)
     pass

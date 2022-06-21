@@ -64,20 +64,22 @@ def compute_metrics(labels, preds):
     }
 
 
-def perf_measure(y_true, y_pred):
-    TP, FP, TN, FN = 0, 0, 0, 0
+def perf_measure(confusion_matrix):
+    subclass_metrics = {}
+    for index, one in enumerate(confusion_matrix):
+        tn, fp, fn, tp = one[0][0], one[0][1], one[1][0], one[1][1]
+        accuracy = (tp + tn) / (tn + fp + fn + tp)
+        precision = tp / (tp + fp)
+        recall = tp / (tp + fn)
+        f1 = 2 * precision * recall / (precision + recall)
+        subclass_metrics[index + 1] = {
+            'accuracy': round(accuracy, 6),
+            'precision': round(precision, 6),
+            'recall': round(recall, 6),
+            'f1': round(f1, 6),
+        }
 
-    for i in range(len(y_true)):
-        if y_true[i] == 1 and y_pred[i] == 1:
-            TP += 1
-        if y_true[i] == 0 and y_pred[i] == 1:
-            FP += 1
-        if y_true[i] == 0 and y_pred[i] == 0:
-            TN += 1
-        if y_true[i] == 1 and y_pred[i] == 0:
-            FN += 1
-
-    return TP, FP, TN, FN
+    return subclass_metrics
 
 
 def evaluate(tokenizer, model, data_loader, device, multi_class: bool = False):
@@ -96,7 +98,7 @@ def evaluate(tokenizer, model, data_loader, device, multi_class: bool = False):
     model.eval()
     answer_list, sent_list = [], []
     for batch in tqdm(data_loader, desc='Evaluation:', ascii=True, ncols=80, leave=True, total=len(data_loader)):
-    # for _, batch in enumerate(data_loader):
+        # for _, batch in enumerate(data_loader):
         batch = tuple(t.to(device) for t in batch)
         with torch.no_grad():
             logits, _ = model(*batch)
@@ -113,4 +115,3 @@ def evaluate(tokenizer, model, data_loader, device, multi_class: bool = False):
             answer_list = [str(x) for x in answer_list]
 
     return answer_list, sent_list
-

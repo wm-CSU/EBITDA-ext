@@ -11,6 +11,7 @@ from utils import read_annotation
 from S1_preprocess import Drop_Redundance
 from S4_dataset import TestData
 from S7_evaluate import evaluate
+from S7_evaluate import subclass_confusion_matrix, compute_metrics, perf_measure
 
 
 class Prediction:
@@ -142,7 +143,8 @@ class PredictionWithlabels:
                                                  label_map=self.label_map)
             one_dataset, _ = self.dataset_tool.load_one(one_sent=one_sent, one_label=one_label)
             one_loader = DataLoader(one_dataset, batch_size=1, shuffle=False)
-
+            if not one_loader:
+                print('{} is null! Please change it.'.format(filename))
             predictions, sent, labels = self.evaluate_for_test(self.dataset_tool.tokenizer, model, one_loader, device)
             target_list.extend(labels)
             pred_list.extend(predictions)
@@ -150,16 +152,7 @@ class PredictionWithlabels:
             self.data.loc[index, :] = self.sent_data_align_multi_class(sent, predictions=predictions, one_data=one)
 
         self.data.to_excel(to_file, to_sheet)
-
-        from S7_evaluate import subclass_confusion_matrix, compute_metrics
-        mcm = subclass_confusion_matrix(targetSrc=target_list, predSrc=pred_list)
-        result = compute_metrics(labels=target_list, preds=pred_list)
-        with open('result/result.txt', 'a+') as f:
-            f.write('\n\n\n' + time.asctime() + '   PredictionWithlabels   ' + self.test_file + ' -> ' + to_file + '\n')
-            f.write(str([str(k) + ': ' + str(format(v, '.6f')) for k, v in result.items() if
-                         k != 'subclass_confusion_matrix']) + '\n')
-            f.write(''.join(np.array2string(mcm).splitlines()))
-        f.close()
+        self.metrics_output(pred_to_file=to_file, target_list=target_list, pred_list=pred_list)
 
         return
 
@@ -197,9 +190,10 @@ class PredictionWithlabels:
                 for label in labels:
                     if one_data[label.replace('_sentence', '')] == 1:
                         one_data[label.replace('_sentence', '')] = 2
-                        one_data[label] = ' '.join([str(one_data[label]), '\n\n'])
+                        one_data[label] = ''.join([str(one_data[label]), '\n\n'])
                     if one_data[label.replace('_sentence', '')] == 0:
                         one_data[label.replace('_sentence', '')] = -1
+                        one_data[label] = ''
                     one_data[label] = '; '.join([str(one_data[label]), sent])
             else:
                 continue
@@ -208,8 +202,7 @@ class PredictionWithlabels:
 
     def data_preprocess(self):
         self.data.fillna('', inplace=True)
-        for k, v in self.label_map.items():
-            self.data[k.replace('_sentence', '')] = 0
+
         return
 
     def _get_label_map(self, filename: str = r'data/label_map.json'):
@@ -218,3 +211,42 @@ class PredictionWithlabels:
             f.close()
 
         return label_map
+
+    def metrics_output(self, pred_to_file, target_list, pred_list,
+                       filename: str = 'result/result.txt', ):
+        sentence_mcm = subclass_confusion_matrix(targetSrc=target_list, predSrc=pred_list)
+        sentence_subclass_metrics = perf_measure(sentence_mcm)
+        result = compute_metrics(labels=target_list, preds=pred_list)
+        samples_mcm = self.sample_cm()
+        sample_subclass_metrics = perf_measure(samples_mcm)
+        with open(filename, 'a+') as f:
+            f.write('\n\n\n' + time.asctime() + '   PredictionWithlabels   ' + self.test_file +
+                    '  ->  ' + pred_to_file + '\n')
+            f.write(str([str(k) + ': ' + str(format(v, '.6f')) for k, v in result.items() if
+                         k != 'subclass_confusion_matrix']) + '\n')
+
+            f.write('sentence_mcm: \n')
+            f.write(''.join(np.array2string(sentence_mcm).splitlines()))
+            for k, v in sentence_subclass_metrics.items():
+                f.write('\n' + str(k) + ': ' + str(v))
+
+            f.write('\nsamples_mcm: \n')
+            f.write(''.join(np.array2string(samples_mcm).splitlines()))
+            for k, v in sample_subclass_metrics.items():
+                f.write('\n' + str(k) + ': ' + str(v))
+        f.close()
+
+        return
+
+    def sample_cm(self):
+        subclass_mcm = np.empty([19, 2, 2], dtype=int)
+
+        for name, index in self.label_map.items():
+            one = self.data[name.replace('_sentence', '')].tolist()
+            tn = one.count(0)
+            fn = one.count(1)
+            tp = one.count(2)
+            fp = one.count(-1)
+            subclass_mcm[index - 1] = np.array([[tn, fp], [fn, tp]])
+
+        return subclass_mcm
