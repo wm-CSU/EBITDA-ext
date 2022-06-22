@@ -65,7 +65,7 @@ class Division:
 
     def sent_resplit(self, paragraph):
         for para in paragraph:
-            if len(para) > 800:  # resplit
+            if len(para) > 500:  # resplit
                 re_sent = re.split(',|\(.{5,}?\)', para.strip())
                 # 保留分割符号，置于句尾，比如标点符号
                 seg_word = re.findall(',|\(.{5,}?\)', para.strip())

@@ -60,13 +60,20 @@ def main(config_file='config/bert_config.json',
     weights = 1. / class_sample_counts
     mid = np.array([(weights * t).sum(axis=0, dtype=torch.float) for t in target])
     samples_weights = np.where(mid == 0., 0.001, mid)
-    sampler = WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights), replacement=True)
+    sampler = WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights)//3, replacement=True)
     data_loader = {
         'train': DataLoader(
             train_set, sampler=sampler, batch_size=config.batch_size, shuffle=False),
         'valid_train': DataLoader(
             valid_set_train, batch_size=config.batch_size, shuffle=False),
     }
+
+    # sampler_target = torch.zeros(config.num_classes)
+    # noise_sample = 0
+    # for batch in data_loader['train']:
+    #     sample = [1 for i in batch[-1][:] if i.equal(torch.zeros(config.num_classes, dtype=torch.long))]
+    #     noise_sample += sample.count(1)
+    #     sampler_target.add_(batch[-1].sum(axis=0, keepdims=False, dtype=torch.int))
 
     config.labels_co_mat = torch.Tensor(get_label_cooccurance_matrix(train_set[:][-1])).to(device)
 
@@ -117,7 +124,8 @@ def main(config_file='config/bert_config.json',
     #                        # test_txt='data/adjust_txt/',
     #                        )
     pred_tool.evaluate_for_all(model=model, device=device,
-                               to_file=config.test_to_file, to_sheet=config.test_to_sheet,
+                               to_file=config.prediction_file, to_sheet=config.prediction_sheet,
+                               metrics_save_file=config.prediction_metrics_save_file,
                                multi_class=True)
 
 

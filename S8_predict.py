@@ -125,6 +125,7 @@ class PredictionWithlabels:
 
     def evaluate_for_all(self, model, device,
                          to_file='data/predict.xlsx', to_sheet='Sheet1',
+                         metrics_save_file: str = 'result/result.txt',
                          multi_class: bool = False):
         '''
         遍历测试集，逐条数据预测
@@ -152,7 +153,8 @@ class PredictionWithlabels:
             self.data.loc[index, :] = self.sent_data_align_multi_class(sent, predictions=predictions, one_data=one)
 
         self.data.to_excel(to_file, to_sheet)
-        self.metrics_output(pred_to_file=to_file, target_list=target_list, pred_list=pred_list)
+        self.metrics_output(pred_to_file=to_file, target_list=target_list, pred_list=pred_list,
+                            filename=metrics_save_file)
 
         return
 
@@ -226,14 +228,15 @@ class PredictionWithlabels:
                          k != 'subclass_confusion_matrix']) + '\n')
 
             f.write('sentence_mcm: \n')
-            f.write(''.join(np.array2string(sentence_mcm).splitlines()))
+            # f.write(''.join(np.array2string(sentence_mcm).splitlines()))
             for k, v in sentence_subclass_metrics.items():
-                f.write('\n' + str(k) + ': ' + str(v))
+                f.write(str(k) + ': ' + ''.join(np.array2string(sentence_mcm[k - 1]).splitlines())
+                        + '\t' + str(v) + '\n')
 
             f.write('\nsamples_mcm: \n')
-            f.write(''.join(np.array2string(samples_mcm).splitlines()))
             for k, v in sample_subclass_metrics.items():
-                f.write('\n' + str(k) + ': ' + str(v))
+                f.write(str(k) + ': ' + ''.join(np.array2string(samples_mcm[k - 1]).splitlines())
+                        + '\t' + str(v) + '\n')
         f.close()
 
         return

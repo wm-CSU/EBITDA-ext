@@ -1,6 +1,6 @@
 {
   "model_type": "bert",
-  "max_seq_len": 200,
+  "max_seq_len": 500,
   "model_path": "model/bert-base-uncased/",
   "last_model_path": "model/bert-base-uncased/",
   "log_path": "log/",
@@ -11,10 +11,11 @@
   "test_file": "data/test_lqj_with answer.xlsx",
   "test_sheet": "Sheet1",
   "test_txt": "data/test_adjust_txt/",
-  "test_to_file": "result/prediction-for lqj-with_resampling_lstm_update sent split-analysis.xlsx",
-  "test_to_sheet": "Sheet1",
+  "prediction_file": "result/prediction-for lqj-with_resampling_lstm_update S2S3-analysis.xlsx",
+  "prediction_sheet": "Sheet1",
+  "prediction_metrics_save_file": "result/result.txt",
 
-  "batch_size": 8,
+  "batch_size": 4,
   "multi_gpu": false,
   "use_whitening": false,
 
@@ -30,5 +31,5 @@
   "gradient_accumulation_steps": 1,
   "max_grad_norm": 1e-3,
 
-  "experiment_name": "BERT-batch3_data-with_resampling_lstm_update sent split"
+  "experiment_name": "BERT-batch3_data-with_resampling_lstm_update S2S3"
 }

@@ -26,7 +26,7 @@ from copy import deepcopy
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-# from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm, trange
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from transformers.optimization import (
@@ -38,9 +38,7 @@ from tools.pytorchtools import EarlyStopping
 
 class Trainer:
     """Trainer for bert-base-uncased.
-
     """
-
     def __init__(self,
                  model, data_loader: Dict[str, DataLoader],
                  device, config):
@@ -69,7 +67,7 @@ class Trainer:
         self.optimizer = self._get_optimizer()
         self.scheduler = self._get_scheduler()
         self.criterion = nn.BCELoss()
-        # self.writer = SummaryWriter()
+        self.writer = SummaryWriter()
 
     def _get_optimizer(self):
         """Get optimizer for different models.
@@ -168,7 +166,7 @@ class Trainer:
             [str(epoch)] + ['\n    train: '] +
             [str(k) + ': ' + str(format(v, '.6f')) for k, v in train_result.items() if k != 'subclass_confusion_matrix']
             + ['\n    valid: '] + [str(k) + ': ' + str(format(v, '.6f')) for k, v in valid_result.items() if
-                            k != 'subclass_confusion_matrix'] + ['\n    '] +
+                                   k != 'subclass_confusion_matrix'] + ['\n    '] +
             [''.join(np.array2string(valid_result['subclass_confusion_matrix']).splitlines())] + ['\n'])
         )
         return train_result, valid_result
@@ -181,7 +179,7 @@ class Trainer:
         """
         torch.save(self.model.state_dict(), filename)
 
-    def train(self, ReTrain: bool=False):
+    def train(self, ReTrain: bool = False):
         """Train model on train set and evaluate on train and valid set.
 
         Returns:
@@ -257,6 +255,8 @@ class Trainer:
                             self.scheduler.step()
                             self.optimizer.zero_grad()
                             step_logger.info(str(self.steps_left) + ', ' + str(loss.item()))
+                        self.writer.add_scalar('train loss', loss, epoch * self.config.batch_size + step)
+
                         tqdm_obj.update(1)
             except KeyboardInterrupt:
                 tqdm_obj.close()
@@ -265,6 +265,8 @@ class Trainer:
             progress_bar.update(1)
             train_result, valid_result = self._epoch_evaluate_update_description_log(
                 tqdm_obj=progress_bar, logger=epoch_logger, epoch=epoch + 1)
+            self.writer.add_scalar('train f1', train_result['f1'], epoch)
+            self.writer.add_scalar('valid f1', valid_result['f1'], epoch)
             # 分别保存最新模型，最优模型
             torch.save({'model_state_dict': self.model.state_dict(),
                         'epoch': epoch + 1,
@@ -283,6 +285,7 @@ class Trainer:
             if self.earlystop.early_stop:
                 epoch_logger.info("Early stop \n")
                 break
+        self.writer.close()
 
         return best_model_state_dict
 
