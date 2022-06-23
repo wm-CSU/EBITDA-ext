@@ -11,7 +11,7 @@ from utils import read_annotation
 from S1_preprocess import Drop_Redundance
 from S4_dataset import TestData
 from S7_evaluate import evaluate
-from S7_evaluate import subclass_confusion_matrix, compute_metrics, perf_measure
+from S7_evaluate import Metrics
 
 
 class Prediction:
@@ -116,12 +116,12 @@ class PredictionWithlabels:
         self.label_map = self._get_label_map()
         ori_data = read_annotation(filename=test_file, sheet_name=test_sheet)
         self.data = Drop_Redundance(ori_data, 'data/adjust_test.xlsx', Train=False)
-        # self.data = read_annotation(filename=test_file, sheet_name=test_sheet)
         from S3_sentence_division import Division
         self.division = Division(self.data)
         self.test_file = test_file
         self.test_txt = test_txt
         self.dataset_tool = TestData(vocab_file, max_seq_len=max_seq_len)
+        self.metrics = Metrics()
 
     def evaluate_for_all(self, model, device,
                          to_file='data/predict.xlsx', to_sheet='Sheet1',
@@ -160,11 +160,11 @@ class PredictionWithlabels:
 
     def evaluate_for_test(self, tokenizer, model, data_loader, device):
         import torch
+        from tqdm import tqdm
         from torch import nn
         model.eval()
         answer_list, sent_list, labels = [], [], []
-        # for batch in tqdm(data_loader, desc='Evaluation:', ascii=True, ncols=80, leave=True, total=len(data_loader)):
-        for _, batch in enumerate(data_loader):
+        for batch in tqdm(data_loader, desc='Evaluation:', ascii=True, ncols=80, leave=True, total=len(data_loader)):
             batch = tuple(t.to(device) for t in batch)
             with torch.no_grad():
                 logits, _ = model(*batch[:-1])
@@ -216,11 +216,15 @@ class PredictionWithlabels:
 
     def metrics_output(self, pred_to_file, target_list, pred_list,
                        filename: str = 'result/result.txt', ):
-        sentence_mcm = subclass_confusion_matrix(targetSrc=target_list, predSrc=pred_list)
-        sentence_subclass_metrics = perf_measure(sentence_mcm)
-        result = compute_metrics(labels=target_list, preds=pred_list)
+        sentence_mcm = self.metrics.subclass_confusion_matrix(targetSrc=target_list, predSrc=pred_list)
+        sentence_subclass_metrics = self.metrics.perf_measure(sentence_mcm)
+        sentence_total_cm, sentence_miss = self.metrics.statistic_misjudgement(labels=target_list, preds=pred_list)
+
+        result = self.metrics.compute_metrics(labels=target_list, preds=pred_list)
+
         samples_mcm = self.sample_cm()
-        sample_subclass_metrics = perf_measure(samples_mcm)
+        sample_subclass_metrics = self.metrics.perf_measure(samples_mcm)
+
         with open(filename, 'a+') as f:
             f.write('\n\n\n' + time.asctime() + '   PredictionWithlabels   ' + self.test_file +
                     '  ->  ' + pred_to_file + '\n')
@@ -232,6 +236,8 @@ class PredictionWithlabels:
             for k, v in sentence_subclass_metrics.items():
                 f.write(str(k) + ': ' + ''.join(np.array2string(sentence_mcm[k - 1]).splitlines())
                         + '\t' + str(v) + '\n')
+                f.write('   class misjudge:' + ''.join(np.array2string(sentence_total_cm[k - 1]).splitlines()) + '\n')
+            f.write('\nsentence miss: ' + np.array2string(sentence_miss))
 
             f.write('\nsamples_mcm: \n')
             for k, v in sample_subclass_metrics.items():

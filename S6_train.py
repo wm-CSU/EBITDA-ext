@@ -34,6 +34,7 @@ from transformers.optimization import (
 
 from utils import get_csv_logger
 from tools.pytorchtools import EarlyStopping
+from S7_evaluate import Metrics
 
 
 class Trainer:
@@ -238,7 +239,6 @@ class Trainer:
                     for step, batch in enumerate(tqdm_obj):
                         batch = tuple(t.to(self.device) for t in batch)
                         logits, _ = self.model(*batch[:-1])  # the last one is label
-                        # try multi-class
                         predictions = nn.Sigmoid()(logits)
                         loss = self.criterion(predictions.float(), batch[-1].float())
                         # loss = nn.BCEWithLogitsLoss()(predictions, true_labels.to(self.device).float())
@@ -255,7 +255,6 @@ class Trainer:
                             self.scheduler.step()
                             self.optimizer.zero_grad()
                             step_logger.info(str(self.steps_left) + ', ' + str(loss.item()))
-                        self.writer.add_scalar('train loss', loss, epoch * self.config.batch_size + step)
 
                         tqdm_obj.update(1)
             except KeyboardInterrupt:
@@ -265,6 +264,7 @@ class Trainer:
             progress_bar.update(1)
             train_result, valid_result = self._epoch_evaluate_update_description_log(
                 tqdm_obj=progress_bar, logger=epoch_logger, epoch=epoch + 1)
+            self.writer.add_scalar('train loss', train_loss_sum / len(self.data_loader['train']), epoch)
             self.writer.add_scalar('train f1', train_result['f1'], epoch)
             self.writer.add_scalar('valid f1', valid_result['f1'], epoch)
             # 分别保存最新模型，最优模型
@@ -293,8 +293,8 @@ class Trainer:
         precision, recall, f1_micro, _ = precision_recall_fscore_support(labels, preds, average='micro')
         precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(labels, preds, average='macro')
         acc = accuracy_score(labels, preds)
-        from S7_evaluate import subclass_confusion_matrix
-        mcm = subclass_confusion_matrix(targetSrc=labels, predSrc=preds)
+        metrics = Metrics()
+        mcm = metrics.subclass_confusion_matrix(targetSrc=labels, predSrc=preds)
         return {
             'accuracy': acc,
             'precision': precision,
