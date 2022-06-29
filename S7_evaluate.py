@@ -118,7 +118,7 @@ class Metrics:
         return np.around(confusion_matrix, 3), miss_sample
 
 
-def evaluate(tokenizer, model, data_loader, device, multi_class: bool = False):
+def evaluate(tokenizer, model, data_loader, device, sigmoid_threshold=0.80):
     """Evaluate model on data loader in device.
 
     Args:
@@ -141,13 +141,43 @@ def evaluate(tokenizer, model, data_loader, device, multi_class: bool = False):
 
         sent_list.extend([tokenizer.decode(x, skip_special_tokens=True) for x in batch[0]])
 
-        if multi_class:
-            predictions = nn.Sigmoid()(logits)
-            compute_pred = [[1 if one > 0.90 else 0 for one in row] for row in
-                            predictions.detach().cpu().numpy().tolist()]
-            answer_list.extend(compute_pred)  # multi-class
-        else:
-            answer_list.extend(torch.argmax(logits, dim=1).detach().cpu().numpy().tolist())
-            answer_list = [str(x) for x in answer_list]
+        predictions = nn.Sigmoid()(logits)
+        compute_pred = [[1 if one > sigmoid_threshold else 0 for one in row] for row in
+                        predictions.detach().cpu().numpy().tolist()]
+        answer_list.extend(compute_pred)  # multi-class
+
+    return answer_list, sent_list
+
+
+def evaluate_2stage(tokenizer, model, data_loader, device, sigmoid_threshold=0.80):
+    """Evaluate model on data loader in device.
+
+    Args:
+        tokenizer: to decode sentence
+        model: model to be evaluate
+        data_loader: torch.utils.data.DataLoader
+        device: cuda or cpu
+        multi_class:
+    Returns:
+        answer list, sent_list
+    """
+    from torch import nn
+    model.eval()
+    answer_list, sent_list = [], []
+    for batch in tqdm(data_loader, desc='Evaluation:', ascii=True, ncols=80, leave=True, total=len(data_loader)):
+        batch = tuple(t.to(device) for t in batch)
+        with torch.no_grad():
+            logits, logits2, to_index = model(*batch)
+
+        if not to_index.numel():
+            continue
+
+        goal_sent = torch.index_select(batch[0].long(), 0, to_index.to(device))
+        sent_list.extend([tokenizer.decode(x, skip_special_tokens=True) for x in goal_sent])
+
+        predictions = nn.Sigmoid()(logits2)
+        compute_pred = [[1 if one > sigmoid_threshold else 0 for one in row] for row in
+                        predictions.detach().cpu().numpy().tolist()]
+        answer_list.extend(compute_pred)  # multi-class
 
     return answer_list, sent_list

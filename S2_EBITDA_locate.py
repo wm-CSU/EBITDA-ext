@@ -318,14 +318,14 @@ class Paragraph_Extract:
 
 
 if __name__ == '__main__':
-    ori_data1 = read_annotation(filename=r'data/train.xlsx', sheet_name='Sheet1')
-    ext1 = Paragraph_Extract(ori_data1, Train=False)
-    start = time.time()
-    ext1.deal(input_path=r'data/txt_set/', output_path=r'data/adjust_txt/')
-    end = time.time()
-    print('time: {} s'.format(end - start))
+    # ori_data1 = read_annotation(filename=r'data/train.xlsx', sheet_name='Sheet1')
+    # ext1 = Paragraph_Extract(ori_data1, Train=False)
+    # start = time.time()
+    # ext1.deal(input_path=r'data/txt_set/', output_path=r'data/adjust_txt/')
+    # end = time.time()
+    # print('time: {} s'.format(end - start))
 
-    ori_data3 = read_annotation(filename=r'data/test_lqj_with answer.xlsx', sheet_name='Sheet1')
+    ori_data3 = read_annotation(filename=r'data/test_yqhlqj_with answer.xlsx', sheet_name='Sheet1')
     ext3 = Paragraph_Extract(ori_data3, Train=False)
     start = time.time()
     ext3.deal(input_path=r'data/test_txt_set/', output_path=r'data/test_adjust_txt/')

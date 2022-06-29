@@ -30,7 +30,7 @@ class Prediction:
 
     def evaluate_for_all(self, model, device,
                          to_file='data/predict.xlsx', to_sheet='Sheet1',
-                         multi_class: bool = False):
+                         sigmoid_threshold=0.80):
         '''
         遍历测试集，逐条数据预测
         :param model:
@@ -46,11 +46,11 @@ class Prediction:
             one_loader = DataLoader(one_dataset, batch_size=1, shuffle=False)
 
             predictions, sent = evaluate(self.dataset_tool.tokenizer, model, one_loader,
-                                         device, multi_class=multi_class)
-            if multi_class:
-                self.data.loc[index, :] = self.sent_data_align_multi_class(sent, predictions=predictions, one_data=one)
-            else:
-                self.data.loc[index, :] = self.sent_data_align(sent, predictions=predictions, one_data=one)
+                                         device, sigmoid_threshold=sigmoid_threshold)
+            # if multi_class:
+            self.data.loc[index, :] = self.sent_data_align_multi_class(sent, predictions=predictions, one_data=one)
+            # else:
+            #     self.data.loc[index, :] = self.sent_data_align(sent, predictions=predictions, one_data=one)
 
         self.data.to_excel(to_file, to_sheet)
 
@@ -126,7 +126,7 @@ class PredictionWithlabels:
     def evaluate_for_all(self, model, device,
                          to_file='data/predict.xlsx', to_sheet='Sheet1',
                          metrics_save_file: str = 'result/result.txt',
-                         multi_class: bool = False):
+                         sigmoid_threshold=0.80):
         '''
         遍历测试集，逐条数据预测
         :param model:
@@ -146,7 +146,10 @@ class PredictionWithlabels:
             one_loader = DataLoader(one_dataset, batch_size=1, shuffle=False)
             if not one_loader:
                 print('{} is null! Please change it.'.format(filename))
-            predictions, sent, labels = self.evaluate_for_test(self.dataset_tool.tokenizer, model, one_loader, device)
+            # predictions, sent, labels = self.evaluate_for_2stage(
+            predictions, sent, labels = self.evaluate_for_2stage(
+                self.dataset_tool.tokenizer, model, one_loader, device, sigmoid_threshold
+            )
             target_list.extend(labels)
             pred_list.extend(predictions)
 
@@ -158,7 +161,7 @@ class PredictionWithlabels:
 
         return
 
-    def evaluate_for_test(self, tokenizer, model, data_loader, device):
+    def evaluate_for_test(self, tokenizer, model, data_loader, device, sigmoid_threshold=0.80):
         import torch
         from tqdm import tqdm
         from torch import nn
@@ -172,7 +175,34 @@ class PredictionWithlabels:
             sent_list.extend([tokenizer.decode(x, skip_special_tokens=True) for x in batch[0]])
 
             predictions = nn.Sigmoid()(logits)
-            compute_pred = [[1 if one > 0.90 else 0 for one in row] for row in
+            compute_pred = [[1 if one > sigmoid_threshold else 0 for one in row] for row in
+                            predictions.detach().cpu().numpy().tolist()]
+            answer_list.extend(compute_pred)  # multi-class
+
+        return answer_list, sent_list, labels
+
+    def evaluate_for_2stage(self, tokenizer, model, data_loader, device, sigmoid_threshold):
+        import torch
+        from tqdm import tqdm
+        from torch import nn
+        model.eval()
+        answer_list, sent_list, labels = [], [], []
+        for batch in tqdm(data_loader, desc='Evaluation:', ascii=True, ncols=80, leave=True, total=len(data_loader)):
+            batch = tuple(t.to(device) for t in batch)
+            with torch.no_grad():
+                logits, logits2, to_index = model(*batch[:-1])
+
+            if not to_index.numel():
+                continue
+
+            target_b2 = torch.index_select(batch[-1].long(), 0, to_index.to(device))
+            labels.extend(target_b2.detach().cpu().numpy().tolist())
+
+            goal_sent = torch.index_select(batch[0].long(), 0, to_index.to(device))
+            sent_list.extend([tokenizer.decode(x, skip_special_tokens=True) for x in goal_sent])
+
+            predictions = nn.Sigmoid()(logits2)
+            compute_pred = [[1 if one > sigmoid_threshold else 0 for one in row] for row in
                             predictions.detach().cpu().numpy().tolist()]
             answer_list.extend(compute_pred)  # multi-class
 

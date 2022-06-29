@@ -39,7 +39,6 @@ class Division:
         return labels
 
     def txt2sent(self, filename):
-        # 先根据 excel 将标准答案句抽取出来，再根据规则分句。
         sentence = []
         with open(filename, 'r', encoding='utf8') as f:
             paragraph = f.readlines()
@@ -65,7 +64,7 @@ class Division:
 
     def sent_resplit(self, paragraph):
         for para in paragraph:
-            if len(para) > 500:  # resplit
+            if len(para) > 600:  # resplit
                 re_sent = re.split(',|\(.{5,}?\)', para.strip())
                 # 保留分割符号，置于句尾，比如标点符号
                 seg_word = re.findall(',|\(.{5,}?\)', para.strip())
@@ -97,7 +96,6 @@ class Division:
                 value = value.replace('，', ',')
                 for sent in one_sent:
                     if value in sent.strip() or sent.strip() in value:
-                        # label[sent.strip()] = label_map[name]  # one-class
                         label[sent.strip()][label_map[name] - 1] = 1  # multi-class
                     else:
                         continue

@@ -19,12 +19,14 @@ Usage:
 import re
 import os
 import torch
-from torch.utils.data import TensorDataset
+from torch.utils.data import TensorDataset, Dataset
 from torch.utils.data import random_split
 from transformers import BertTokenizer
 from tqdm import tqdm
 from utils import read_annotation
 from S3_sentence_division import Division
+import string
+from zhon.hanzi import punctuation as chinese_punctuation
 
 
 class Data:
@@ -44,8 +46,63 @@ class Data:
             vocab_file: one word each line
             max_seq_len: max sequence length, default: 512
         """
+        self.vocab_file = vocab_file
         self.tokenizer = BertTokenizer(vocab_file)
         self.max_seq_len = max_seq_len
+
+    def for_word2vec(self, filename: str = 'data/Nonrecurring Items_陈炫衣_20220226.xlsx',
+                     sheet_name: str = 'Sheet1',
+                     txt_path: str = 'data/sent_label/'):
+        ori_data = read_annotation(filename=filename, sheet_name=sheet_name)
+        sent_list, label_list = [], []
+
+        division = Division(ori_data)
+        for index, one in division.data.iterrows():
+            filename = os.path.join(txt_path, index + '.txt')
+            f = open(filename, 'r', encoding='utf8')
+            for line in f.readlines():
+                one = line.split('\t')
+                # word_list = []
+                # for word in one[0].split():
+                #     res = re.sub('[{}{}]'.format(string.punctuation, chinese_punctuation), "", word)
+                # word_list.append(res)
+                res = re.sub('[{}{}]'.format(string.punctuation, chinese_punctuation), "", one[0])
+                sent_list.append(res.split())
+                label_list.append(eval(one[1]))
+
+        return sent_list, label_list
+
+    def for_add_tokens(self, filename: str = 'data/Nonrecurring Items_陈炫衣_20220226.xlsx',
+                       sheet_name: str = 'Sheet1',
+                       txt_path: str = 'data/sent_label/'):
+        ori_data = read_annotation(filename=filename, sheet_name=sheet_name)
+        sent_list, label_list = [], []
+
+        division = Division(ori_data)
+        for index, one in division.data.iterrows():
+            filename = os.path.join(txt_path, index + '.txt')
+            f = open(filename, 'r', encoding='utf8')
+            for line in f.readlines():
+                one = line.split('\t')
+                # 连字符保留
+                res = re.sub('[{}{}]'.format(r"""!"#$%&'()*+,./:;<=>?@[\]^_`{|}~""", chinese_punctuation), "", one[0])
+                sent_list.extend(res.split())
+
+        words = list(set(sent_list))
+        words = [one for one in words if not bool(re.search(r'\d', one)) and not bool(re.match('[xvi]+$', one))
+                 and len(one) > 3]
+        vocab_list = self.read_vocab(self.vocab_file)
+        need_add = [one for one in words if one not in vocab_list]
+        num_added_toks = self.tokenizer.add_tokens(need_add)  # 返回一个数，表示加入的新词数量，在这里是2
+        print(num_added_toks)
+
+        return self.tokenizer
+
+    def read_vocab(self, vocab):
+        with open(vocab, 'r', encoding='utf8') as f:
+            vocab_list = f.readlines()
+        f.close()
+        return vocab_list
 
     def load_file(self,
                   filename: str = 'data/Nonrecurring Items_陈炫衣_20220226.xlsx',
@@ -88,7 +145,7 @@ class Data:
         return dataset, label_list
 
     def load_train_and_valid_files(self,
-                                   train_file, train_sheet, train_txt,):
+                                   train_file, train_sheet, train_txt, ):
         """Load train files for task.
 
         Args:
@@ -163,7 +220,7 @@ class Data:
 class TestData:
     def __init__(self,
                  vocab_file='',
-                 max_seq_len: int = 512,):
+                 max_seq_len: int = 512, ):
         """Initialize data processor.
         Args:
             vocab_file: one word each line
@@ -172,6 +229,16 @@ class TestData:
         self.tokenizer = BertTokenizer(vocab_file)
         self.max_seq_len = max_seq_len
         self.datatool = Data(vocab_file, max_seq_len=max_seq_len)
+
+    def for_word2vec(self, one_sent, one_label):
+        sent_list, label_list = [], []
+        for sent in one_sent:
+            res = re.sub('[{}{}]'.format(string.punctuation, chinese_punctuation), "", sent)
+            sent_list.append(res.split())
+
+            label_list.append(one_label[sent.strip()])
+
+        return sent_list, label_list
 
     def load_from_txt(self, filename):
         """Load train file and construct TensorDataset.

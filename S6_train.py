@@ -35,6 +35,7 @@ from transformers.optimization import (
 from utils import get_csv_logger
 from tools.pytorchtools import EarlyStopping
 from S7_evaluate import Metrics
+from S5_loss import FocalLoss_MultiLabel
 
 
 class Trainer:
@@ -67,7 +68,8 @@ class Trainer:
         self.config.num_training_steps = config.num_epoch * (len(data_loader['train']) // config.batch_size)
         self.optimizer = self._get_optimizer()
         self.scheduler = self._get_scheduler()
-        self.criterion = nn.BCELoss()
+        self.criterion = FocalLoss_MultiLabel()
+        # self.criterion = nn.BCELoss()
         self.writer = SummaryWriter()
 
     def _get_optimizer(self):
@@ -126,7 +128,7 @@ class Trainer:
             labels.extend(batch[-1].detach().cpu().numpy().tolist())
             # answer_list.extend(torch.argmax(logits, dim=1).detach().cpu().numpy().tolist())  # single-class
             predictions = nn.Sigmoid()(logits)
-            compute_pred = [[1 if one > 0.90 else 0 for one in row] for row in
+            compute_pred = [[1 if one > 0.70 else 0 for one in row] for row in
                             predictions.detach().cpu().numpy().tolist()]
             answer_list.extend(compute_pred)  # multi-class
         # return [str(x) for x in answer_list], [str(x) for x in labels]
@@ -227,8 +229,8 @@ class Trainer:
         best_model_state_dict = None
         progress_bar = trange(self.config.num_epoch - start_epoch, desc='Epoch', ncols=220)
         self.earlystop = EarlyStopping(patience=3, verbose=True)
-        self._epoch_evaluate_update_description_log(
-            tqdm_obj=progress_bar, logger=epoch_logger, epoch=0)
+        # self._epoch_evaluate_update_description_log(
+        #     tqdm_obj=progress_bar, logger=epoch_logger, epoch=0)
 
         # start training.
         for epoch in range(start_epoch, self.config.num_epoch):
