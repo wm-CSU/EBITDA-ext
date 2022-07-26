@@ -7,10 +7,10 @@ import pandas as pd
 import numpy as np
 import os
 import re
+import json
 import shutil
 from collections import OrderedDict, Counter
 import torch
-import torch.nn.functional as F
 
 
 def get_path(path):
@@ -52,6 +52,14 @@ def get_csv_logger(log_file_name,
     if title:
         logger.info(title)
     return logger
+
+
+def get_label_map(filename: str = r'data/label_map.json'):
+    with open(filename, 'r') as f:
+        label_map = json.load(f)
+        f.close()
+
+    return label_map
 
 
 def read_annotation(filename, sheet_name):
@@ -162,7 +170,7 @@ def find_lcsubstr(s1, s2):
     return s1[p - mmax:p], mmax  # 返回最长子串及其长度
 
 
-def get_label_cooccurance_matrix(labels):
+def get_label_cooccurance_matrix(labels, filename='result/co_mat.xlsx'):
     """
     get label Co-occurance matrix.
     :param labels: dataset[-1] type:Tensor
@@ -170,29 +178,41 @@ def get_label_cooccurance_matrix(labels):
     """
     class_label_counts = labels.sum(axis=0, keepdims=False, dtype=torch.int)
     label_number = labels.shape[1]
-    co_mat = np.zeros((label_number, label_number), dtype=int)
+    co_mat = np.zeros((label_number, label_number), dtype=float)
     co_mat_normalization = np.zeros((label_number, label_number), dtype=float)
     for one in labels:
         label = one.cpu().numpy().tolist()
-        if Counter(label)[1] > 1:
+        one_num = Counter(label)[1]
+        if one_num > 1:
             index = [i for i, x in enumerate(label) if x == 1]
             for i in range(len(index)):
                 for j in range(i, len(index)):
-                    co_mat[index[i], index[j]] += 1  # 得到的矩阵为上三角矩阵，最后记得复制到下三角即可
+                    co_mat[index[i], index[j]] += 1 / (one_num - 1)  # 得到的矩阵为上三角矩阵，最后记得复制到下三角即可
         else:
             continue
 
     for a in range(label_number):
         for b in range(a + 1, label_number):
+            # if co_mat[a, b] < 1:  # 清除过低的共现情况
+            #     co_mat[a, b] = 0
             co_mat[b, a] = co_mat[a, b]
         co_mat[a, a] += class_label_counts[a]
 
-        co_matSum = np.sum(co_mat[a, :])
-        co_mat_normalization[a, :] = co_mat[a, :] / co_matSum
+    for a in range(label_number):
+        co_matSum = np.sum(co_mat[:, a])
+        co_mat_normalization[:, a] = co_mat[:, a] / co_matSum
     # co_mat 归一化
     # co_matSum = np.sum(co_mat, axis=1)
     # matMax, matMin = np.max(co_mat, axis=0), np.min(co_mat, axis=0)
     # co_mat_normalization = (co_mat - matMin) / (matMax - matMin)
     # co_mat_normalization = F.softmax(torch.Tensor(co_mat), dim=1)
+    writer = pd.ExcelWriter(filename)
+    co_mat = pd.DataFrame(co_mat, index=list(range(1, co_mat.shape[0]+1)), columns=list(range(1, co_mat.shape[1]+1)))
+    co_mat.to_excel(writer, '共现矩阵')
+    normal = pd.DataFrame(co_mat_normalization, index=list(range(1, co_mat_normalization.shape[0]+1)),
+                          columns=list(range(1, co_mat_normalization.shape[1]+1)))
+    normal.to_excel(writer, '归一化结果', float_format='%.5f')
+    writer.save()
+    writer.close()
 
     return co_mat_normalization

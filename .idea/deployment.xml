@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
-  <component name="PublishConfigData" autoUpload="Always" serverName="wm@192.168.1.59:22 password" remoteFilesAllowedToDisappearOnAutoupload="false">
+  <component name="PublishConfigData" autoUpload="On explicit save action" serverName="lzq@192.168.1.66:22 password" remoteFilesAllowedToDisappearOnAutoupload="false">
     <serverData>
+      <paths name="lzq@192.168.1.66:22 password">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/8T/LZQ/EBITDA-Ext-wm" local="$PROJECT_DIR$" />
+          </mappings>
+        </serverdata>
+      </paths>
       <paths name="ma-user@dev-modelarts-cnnorth4.huaweicloud.com:31076">
         <serverdata>
           <mappings>
@@ -31,6 +38,6 @@
         </serverdata>
       </paths>
     </serverData>
-    <option name="myAutoUpload" value="ALWAYS" />
+    <option name="myAutoUpload" value="ON_EXPLICIT_SAVE" />
   </component>
 </project>

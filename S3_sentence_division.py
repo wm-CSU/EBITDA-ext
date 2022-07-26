@@ -3,6 +3,7 @@
 
 Author: Min Wang; wangmin0918@csu.edu.cn
 """
+import difflib
 import json
 import os.path
 import re
@@ -43,6 +44,8 @@ class Division:
         with open(filename, 'r', encoding='utf8') as f:
             paragraph = f.readlines()
             for para in paragraph:
+                if len(para) < 8:
+                    continue
                 mid = self.sent_split(paragraph=para)
                 para2sent = self.sent_resplit(paragraph=mid)
                 sentence.extend(para2sent)
@@ -51,16 +54,17 @@ class Division:
         return [x for x in sentence if x != '']
 
     def sent_split(self, paragraph):
-        # 段落划分为句子并除去过短元素（如单数字或空格）
-        para2sent = re.split(';|\.|\([\s\S]{1,4}\)', paragraph.strip())
-        # 保留分割符号，置于句尾，比如标点符号
-        seg_word = re.findall(';|\.|\([\s\S]{1,4}\)', paragraph.strip())
+        # 划分完成后，括号保留
+        para2sent = re.split(';|\D\.(?!\d)|\D\((?!loss)[\s\S]{1,4}\)', paragraph.strip())  # 句号 分号划分
+        seg_word = re.findall(';|\D\.(?!\d)|\D\((?!loss)[\s\S]{1,4}\)',
+                              paragraph.strip())  # 保留分割符号，置于句尾，比如标点符号
         seg_word.extend(" ")  # 末尾插入一个空字符串，以保持长度和切割成分相同
         para2sent = [x + y for x, y in zip(para2sent, seg_word)]  # 顺序可根据需求调换
-        # 除去句尾的括号项
-        para2sent = [re.sub('\([\s\S]{1,4}\)$', '', sent) for sent in para2sent]
 
-        return [one for one in para2sent if len(one) > 10]
+        para2sent = [re.sub('\((?!loss)[\s\S]{1,4}\)$', '', sent) for sent in para2sent]  # 除去句尾的括号项
+        para2sent = [re.sub('( +|\t|\n|_+)', " ", sent) for sent in para2sent]
+
+        return [one for one in para2sent if len(one) > 8]
 
     def sent_resplit(self, paragraph):
         for para in paragraph:
@@ -74,14 +78,14 @@ class Division:
                     if re_sent[one].endswith(')'):
                         re_sent[one] = re_sent[one] + re_sent[one + 1]
                         re_sent[one + 1] = ''
-                re_sent = [one for one in re_sent if len(one) > 10]
+                re_sent = [one for one in re_sent if len(one) > 8]
 
                 paragraph.extend(re_sent)
                 paragraph.remove(para)
             else:
                 continue
 
-        return paragraph
+        return [one for one in paragraph if len(one) > 8]
 
     def sent_label(self, one_data, one_sent, label_map):
         # 一条数据的sentence与label对应
@@ -95,7 +99,7 @@ class Division:
             elif 'sentence' in name:
                 value = value.replace('，', ',')
                 for sent in one_sent:
-                    if value in sent.strip() or sent.strip() in value:
+                    if self._determine_same(sent, value) > 0.9:
                         label[sent.strip()][label_map[name] - 1] = 1  # multi-class
                     else:
                         continue
@@ -103,6 +107,17 @@ class Division:
                 continue
 
         return label
+
+    def _determine_same(self, split_sent, ori_sent):
+        if len(split_sent) < 3 or len(ori_sent) < 3:
+            return 0
+        if split_sent in ori_sent.strip() or ori_sent.strip() in split_sent:
+            score = 1
+        else:
+            score = difflib.SequenceMatcher(None, split_sent.strip(), ori_sent.strip()).ratio()
+            pass
+
+        return score
 
     def _get_label_map(self, filename: str = r'data/label_map.json'):
         with open(filename, 'r') as f:
@@ -127,10 +142,14 @@ if __name__ == '__main__':
     multi_class_sent_txt = r'data/sent_multi_label'
     # 两批数据处理
     ori_data = read_annotation(filename=r'data/train.xlsx', sheet_name='Sheet1')
-    ext = Paragraph_Extract(ori_data)
-    data = ext.deal(input_path=txt_set, output_path=ebitda_txt)
+    # ext = Paragraph_Extract(ori_data)
+    # data = ext.deal(input_path=txt_set, output_path=ebitda_txt)
     division = Division(ori_data)
     division.deal(label_map=r'data/label_map.json', txtfilepath=ebitda_txt, labelfilepath=multi_class_sent_txt)
+    # filename = os.path.join('data/adjust_txt/1031316_117152011000151_2.txt')
+    # toname = os.path.join('data/sent_multi_label1031316_117152011000151_2.txt')
+    # if os.path.isfile(filename):
+    #     one_sent = division.txt2sent(filename=filename)
 
     # # test
     # multi_class_test_sent_txt = r'data/sent_multi_label'

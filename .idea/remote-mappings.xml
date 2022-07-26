@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="RemoteMappingsManager">
+    <list>
+      <list>
+        <remote-mappings server-id="python@sftp://lzq@192.168.1.66:22/home/lzq/anaconda/envs/EBITDA_wm/bin/python3" />
+      </list>
+    </list>
+  </component>
+</project>

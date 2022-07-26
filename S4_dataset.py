@@ -62,10 +62,6 @@ class Data:
             f = open(filename, 'r', encoding='utf8')
             for line in f.readlines():
                 one = line.split('\t')
-                # word_list = []
-                # for word in one[0].split():
-                #     res = re.sub('[{}{}]'.format(string.punctuation, chinese_punctuation), "", word)
-                # word_list.append(res)
                 res = re.sub('[{}{}]'.format(string.punctuation, chinese_punctuation), "", one[0])
                 sent_list.append(res.split())
                 label_list.append(eval(one[1]))
@@ -128,24 +124,25 @@ class Data:
         division = Division(ori_data)
         for index, one in division.data.iterrows():
             filename = os.path.join(txt_path, index + '.txt')
+            # filename = os.path.join(txt_path, '8063_95012311081957_2.txt')
             f = open(filename, 'r', encoding='utf8')
             for line in f.readlines():
-                one = line.split('\t')
+                one = re.split('[\t\n]', line)
                 sent_list.append(self.tokenizer.tokenize(one[0]))
-                # label_list.append(int(one[1]))
                 label_list.append(eval(one[1]))
-
-                if eval(one[1]) != [0] * division.num_classes:
-                    for _ in range(4):
-                        sent_list.append(self.tokenizer.tokenize(one[0]))
-                        label_list.append(eval(one[1]))
+                #
+                # if eval(one[1]) != [0] * division.num_classes:
+                #     for _ in range(4):
+                #         sent_list.append(self.tokenizer.tokenize(one[0]))
+                #         label_list.append(eval(one[1]))
+            # print('{} is loaded.'.format(filename))
 
         dataset = self._convert_sentence_to_bert_dataset(sent_list, label_list)
 
         return dataset, label_list
 
     def load_train_and_valid_files(self,
-                                   train_file, train_sheet, train_txt, ):
+                                   train_file, train_sheet, train_txt, split_ratio=0.7):
         """Load train files for task.
 
         Args:
@@ -157,7 +154,7 @@ class Data:
         """
         print('Loading train records for train...')
         mydataset, labels = self.load_file(train_file, sheet_name=train_sheet, txt_path=train_txt)
-        train_set, valid_set = self.dataset_split(mydataset)
+        train_set, valid_set = self.dataset_split(mydataset, split_ratio)
         print(len(train_set), 'train records loaded.', len(valid_set), 'valid records loaded.')
 
         return train_set, valid_set
@@ -166,7 +163,7 @@ class Data:
         train, valid = random_split(
             dataset,
             lengths=[int(split_ratio * len(dataset)), len(dataset) - int(split_ratio * len(dataset))],
-            generator=torch.Generator().manual_seed(0))
+            generator=torch.Generator().manual_seed(2022))
 
         return train, valid
 
@@ -273,7 +270,7 @@ class TestData:
         return dataset
 
     def load_one(self, one_sent, one_label):
-        """带标签测试集读取的傻逼函数，最后一定要删掉.
+        """带标签测试集读取
 
         Args:
             file_path: train file
@@ -295,6 +292,52 @@ class TestData:
         dataset = self.datatool._convert_sentence_to_bert_dataset(sent_list, labels_list)
 
         return dataset, labels_list
+
+    def load_file(self,
+                  filename: str = 'data/Nonrecurring Items_陈炫衣_20220226.xlsx',
+                  sheet_name: str = 'Sheet1',
+                  txt_path: str = 'data/sent_label/'):
+        """Load train file and construct TensorDataset.
+
+        Args:
+            file_path: train file
+            sheet_name: sheet name
+            txt_path:
+                If True, txt with 'sentence \t label'
+                Otherwise, txt with paragraph
+
+        Returns:
+            dataset:
+                torch.utils.data.TensorDataset
+                    each record: (input_ids, input_mask, segment_ids, label)
+        """
+        self.label_map = self._get_label_map()
+        ori_data = read_annotation(filename=filename, sheet_name=sheet_name)
+        sent_list, label_list = [], []
+
+        from S1_preprocess import Drop_Redundance
+        data = Drop_Redundance(ori_data, 'data/adjust_test.xlsx', Train=False)
+        division = Division(data)
+        for index, one in data.iterrows():
+            filename = os.path.join(txt_path, index + '.txt')
+            one_sent = division.txt2sent(filename=filename)
+            one_label = division.sent_label(one_data=one, one_sent=one_sent,
+                                            label_map=self.label_map)
+            for sent in one_sent:
+                sent_list.append(self.tokenizer.tokenize(sent))
+                label_list.append(one_label[sent.strip()])
+
+        dataset = self.datatool._convert_sentence_to_bert_dataset(sent_list, label_list)
+
+        return dataset, label_list
+
+    def _get_label_map(self, filename: str = r'data/label_map.json'):
+        import json
+        with open(filename, 'r') as f:
+            label_map = json.load(f)
+            f.close()
+
+        return label_map
 
     def txt2sent(self, filename):
         '''

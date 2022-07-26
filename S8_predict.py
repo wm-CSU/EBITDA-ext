@@ -5,75 +5,34 @@ Author: Min Wang; wangmin0918@csu.edu.cn
 import os
 import json
 import numpy as np
-import time
 from torch.utils.data import DataLoader
 from utils import read_annotation
 from S1_preprocess import Drop_Redundance
 from S4_dataset import TestData
-from S7_evaluate import evaluate
-from S7_evaluate import Metrics
+from S7_evaluate import Metrics, Evaluator
 
 
-class Prediction:
+class pred_tools:
     def __init__(self, vocab_file='',
                  max_seq_len: int = 512,
                  test_file='data/test.xlsx',
                  test_sheet='Sheet1',
                  test_txt='data/test_adjust_txt/'
                  ):
+        """Initialize my evaluator.
+        """
+        super(pred_tools, self).__init__()
+        self.test_file = test_file
+        self.test_txt = test_txt
+
         self.label_map = self._get_label_map()
+        self.evaluator = Evaluator()
+
+        self.dataset_tool = TestData(vocab_file, max_seq_len=max_seq_len)
         ori_data = read_annotation(filename=test_file, sheet_name=test_sheet)
         self.data = Drop_Redundance(ori_data, 'data/adjust_test.xlsx', Train=False)
-        self.data_preprocess()
-        self.test_txt = test_txt
-        self.dataset_tool = TestData(vocab_file, max_seq_len=max_seq_len)
-
-    def evaluate_for_all(self, model, device,
-                         to_file='data/predict.xlsx', to_sheet='Sheet1',
-                         sigmoid_threshold=0.80):
-        '''
-        遍历测试集，逐条数据预测
-        :param model:
-        :param device:
-        :param to_file:
-        :param to_sheet:
-        :param multi_class:
-        :return:
-        '''
-        for index, one in self.data.iterrows():
-            filename = os.path.join(self.test_txt, index + '.txt')
-            one_dataset = self.dataset_tool.load_from_txt(filename)
-            one_loader = DataLoader(one_dataset, batch_size=1, shuffle=False)
-
-            predictions, sent = evaluate(self.dataset_tool.tokenizer, model, one_loader,
-                                         device, sigmoid_threshold=sigmoid_threshold)
-            # if multi_class:
-            self.data.loc[index, :] = self.sent_data_align_multi_class(sent, predictions=predictions, one_data=one)
-            # else:
-            #     self.data.loc[index, :] = self.sent_data_align(sent, predictions=predictions, one_data=one)
-
-        self.data.to_excel(to_file, to_sheet)
-
-        return
 
     def sent_data_align(self, sent_list, predictions, one_data):
-        """
-        对齐句子与标签
-        :param sent_list: [str, ...]
-        :param predictions: [int, ...]
-        :return:
-        """
-        for sent, pred in zip(sent_list, predictions):
-            if pred != '0':
-                label = [k for k, v in self.label_map.items() if str(v) == pred]
-                one_data[label[0].replace('_sentence', '')] = 1
-                one_data[label[0]] = ' '.join([one_data[label[0]], sent])
-            else:
-                continue
-
-        return one_data
-
-    def sent_data_align_multi_class(self, sent_list, predictions, one_data):
         """
         对齐句子与标签
         :param sent_list: [str, ...]
@@ -92,10 +51,10 @@ class Prediction:
 
         return one_data
 
-    def data_preprocess(self):
-        self.data.fillna('', inplace=True)
+    def data_preprocess(self, data):
+        data.fillna('', inplace=True)
         for k, v in self.label_map.items():
-            self.data[k.replace('_sentence', '')] = 0
+            data[k.replace('_sentence', '')] = 0
         return
 
     def _get_label_map(self, filename: str = r'data/label_map.json'):
@@ -106,21 +65,56 @@ class Prediction:
         return label_map
 
 
-class PredictionWithlabels:
+class Prediction(pred_tools):
     def __init__(self, vocab_file='',
                  max_seq_len: int = 512,
                  test_file='data/test.xlsx',
                  test_sheet='Sheet1',
                  test_txt='data/test_adjust_txt/'
                  ):
-        self.label_map = self._get_label_map()
-        ori_data = read_annotation(filename=test_file, sheet_name=test_sheet)
-        self.data = Drop_Redundance(ori_data, 'data/adjust_test.xlsx', Train=False)
+        super(Prediction, self).__init__(
+            vocab_file, max_seq_len, test_file, test_sheet, test_txt)
+        self.data_preprocess(self.data)
+
+    def evaluate_for_all(self, model, device,
+                         to_file='data/predict.xlsx', to_sheet='Sheet1',
+                         sigmoid_threshold=0.80):
+        '''
+        遍历测试集，逐条数据预测
+        :param model:
+        :param device:
+        :param to_file:
+        :param to_sheet:
+        :param multi_class:
+        :return:
+        '''
+        for index, one in self.data.iterrows():
+            filename = os.path.join(self.test_txt, index + '.txt')
+            one_dataset = self.dataset_tool.load_from_txt(filename)
+            one_loader = DataLoader(one_dataset, batch_size=1, shuffle=False)
+
+            predictions, sent = self.evaluator.evaluate2stage(self.dataset_tool.tokenizer, model, one_loader,
+                                                              device, sigmoid_threshold=sigmoid_threshold)
+            self.data.loc[index, :] = self.sent_data_align(sent, predictions=predictions, one_data=one)
+
+        self.data.to_excel(to_file, to_sheet)
+
+        return
+
+
+class PredictionWithlabels(pred_tools):
+    def __init__(self, vocab_file='',
+                 max_seq_len: int = 512,
+                 test_file='data/test.xlsx',
+                 test_sheet='Sheet1',
+                 test_txt='data/test_adjust_txt/'
+                 ):
+        super(PredictionWithlabels, self).__init__(
+            vocab_file, max_seq_len, test_file, test_sheet, test_txt)
+
         from S3_sentence_division import Division
         self.division = Division(self.data)
-        self.test_file = test_file
-        self.test_txt = test_txt
-        self.dataset_tool = TestData(vocab_file, max_seq_len=max_seq_len)
+
         self.metrics = Metrics()
 
     def evaluate_for_all(self, model, device,
@@ -136,7 +130,9 @@ class PredictionWithlabels:
         :param multi_class:
         :return:
         '''
-        target_list, pred_list = [], []
+        target_list, pred_list, sent_list = [], [], []
+        result_excel, labelnames, current = self.metrics.excel_init(self.label_map)
+
         for index, one in self.data.iterrows():
             filename = os.path.join(self.test_txt, index + '.txt')
             one_sent = self.division.txt2sent(filename=filename)
@@ -146,69 +142,32 @@ class PredictionWithlabels:
             one_loader = DataLoader(one_dataset, batch_size=1, shuffle=False)
             if not one_loader:
                 print('{} is null! Please change it.'.format(filename))
-            # predictions, sent, labels = self.evaluate_for_2stage(
-            predictions, sent, labels = self.evaluate_for_2stage(
+            predictions, sent, labels = self.evaluator.evaluate2stage_with_labels(
                 self.dataset_tool.tokenizer, model, one_loader, device, sigmoid_threshold
             )
             target_list.extend(labels)
             pred_list.extend(predictions)
+            sent_list.extend(sent)
 
-            self.data.loc[index, :] = self.sent_data_align_multi_class(sent, predictions=predictions, one_data=one)
+            result_excel, labelnames, current = self.metrics.misjudge_export(
+                filename=index, target_list=labels, pred_list=predictions, sent_list=sent,
+                result_excel=result_excel, labelnames=labelnames, current=current
+            )
+
+            self.data.loc[index, :] = self.align_with_labels(sent, predictions=predictions, one_data=one)
 
         self.data.to_excel(to_file, to_sheet)
-        self.metrics_output(pred_to_file=to_file, target_list=target_list, pred_list=pred_list,
-                            filename=metrics_save_file)
+        result_excel.save('result/eval_yj_sentence.xls')
+        self.metrics.metrics_output(pred_to_file=to_file, target_list=target_list, pred_list=pred_list,
+                                    sent_list=sent_list,
+                                    filename=metrics_save_file)
+        self.eval_yj(save_path='result/eval_yj.xls')
+        # self.misjudge_export(target_list=target_list, pred_list=pred_list, sent_list=sent_list,
+        #                      filename='result/eval_yj_sentence.xls')
 
         return
 
-    def evaluate_for_test(self, tokenizer, model, data_loader, device, sigmoid_threshold=0.80):
-        import torch
-        from tqdm import tqdm
-        from torch import nn
-        model.eval()
-        answer_list, sent_list, labels = [], [], []
-        for batch in tqdm(data_loader, desc='Evaluation:', ascii=True, ncols=80, leave=True, total=len(data_loader)):
-            batch = tuple(t.to(device) for t in batch)
-            with torch.no_grad():
-                logits, _ = model(*batch[:-1])
-            labels.extend(batch[-1].detach().cpu().numpy().tolist())
-            sent_list.extend([tokenizer.decode(x, skip_special_tokens=True) for x in batch[0]])
-
-            predictions = nn.Sigmoid()(logits)
-            compute_pred = [[1 if one > sigmoid_threshold else 0 for one in row] for row in
-                            predictions.detach().cpu().numpy().tolist()]
-            answer_list.extend(compute_pred)  # multi-class
-
-        return answer_list, sent_list, labels
-
-    def evaluate_for_2stage(self, tokenizer, model, data_loader, device, sigmoid_threshold):
-        import torch
-        from tqdm import tqdm
-        from torch import nn
-        model.eval()
-        answer_list, sent_list, labels = [], [], []
-        for batch in tqdm(data_loader, desc='Evaluation:', ascii=True, ncols=80, leave=True, total=len(data_loader)):
-            batch = tuple(t.to(device) for t in batch)
-            with torch.no_grad():
-                logits, logits2, to_index = model(*batch[:-1])
-
-            if not to_index.numel():
-                continue
-
-            target_b2 = torch.index_select(batch[-1].long(), 0, to_index.to(device))
-            labels.extend(target_b2.detach().cpu().numpy().tolist())
-
-            goal_sent = torch.index_select(batch[0].long(), 0, to_index.to(device))
-            sent_list.extend([tokenizer.decode(x, skip_special_tokens=True) for x in goal_sent])
-
-            predictions = nn.Sigmoid()(logits2)
-            compute_pred = [[1 if one > sigmoid_threshold else 0 for one in row] for row in
-                            predictions.detach().cpu().numpy().tolist()]
-            answer_list.extend(compute_pred)  # multi-class
-
-        return answer_list, sent_list, labels
-
-    def sent_data_align_multi_class(self, sent_list, predictions, one_data):
+    def align_with_labels(self, sent_list, predictions, one_data):
         """
         对齐句子与标签
         :param sent_list: [str, ...]
@@ -232,60 +191,72 @@ class PredictionWithlabels:
 
         return one_data
 
-    def data_preprocess(self):
-        self.data.fillna('', inplace=True)
+    def eval_yj(self, save_path):
+        y_true, y_pred, sent = [], [], []
+        for index, one in self.data.iterrows():
+            one_pair = {}
+            one_true, one_pred = [], []
+            for i in range(len(one)):
+                if one[i] == -1:
+                    one_true.append(0)
+                    one_pred.append(1)
+                    class_num = self.label_map[self.data.columns.tolist()[i + 1]] - 1
+                    one_pair[class_num] = one[i + 1]
+                elif one[i] == 0:
+                    one_true.append(0)
+                    one_pred.append(0)
+                elif one[i] == 1:
+                    one_true.append(1)
+                    one_pred.append(0)
+                elif one[i] == 2:
+                    one_true.append(1)
+                    one_pred.append(1)
+                    class_num = self.label_map[self.data.columns.tolist()[i + 1]] - 1
+                    one_pair[class_num] = one[i + 1]
+                else:
+                    continue
+            y_true.append(one_true)
+            y_pred.append(one_pred)
+            sent.append(one_pair)
+
+        import xlwt
+        from re_7_8 import evaluate, save_errorfile
+        result_excel = xlwt.Workbook(encoding='utf-8')
+        # 评估结果
+        evaluate(np.array(y_true), np.array(y_pred), result_excel)
+
+        filename = self.data.index.tolist()
+        # 保存错误文件信息
+        save_errorfile(np.array(y_true), np.array(y_pred), sent, filename, result_excel)
+        result_excel.save(save_path)
 
         return
-
-    def _get_label_map(self, filename: str = r'data/label_map.json'):
-        with open(filename, 'r') as f:
-            label_map = json.load(f)
-            f.close()
-
-        return label_map
-
-    def metrics_output(self, pred_to_file, target_list, pred_list,
-                       filename: str = 'result/result.txt', ):
-        sentence_mcm = self.metrics.subclass_confusion_matrix(targetSrc=target_list, predSrc=pred_list)
-        sentence_subclass_metrics = self.metrics.perf_measure(sentence_mcm)
-        sentence_total_cm, sentence_miss = self.metrics.statistic_misjudgement(labels=target_list, preds=pred_list)
-
-        result = self.metrics.compute_metrics(labels=target_list, preds=pred_list)
-
-        samples_mcm = self.sample_cm()
-        sample_subclass_metrics = self.metrics.perf_measure(samples_mcm)
-
-        with open(filename, 'a+') as f:
-            f.write('\n\n\n' + time.asctime() + '   PredictionWithlabels   ' + self.test_file +
-                    '  ->  ' + pred_to_file + '\n')
-            f.write(str([str(k) + ': ' + str(format(v, '.6f')) for k, v in result.items() if
-                         k != 'subclass_confusion_matrix']) + '\n')
-
-            f.write('sentence_mcm: \n')
-            # f.write(''.join(np.array2string(sentence_mcm).splitlines()))
-            for k, v in sentence_subclass_metrics.items():
-                f.write(str(k) + ': ' + ''.join(np.array2string(sentence_mcm[k - 1]).splitlines())
-                        + '\t' + str(v) + '\n')
-                f.write('   class misjudge:' + ''.join(np.array2string(sentence_total_cm[k - 1]).splitlines()) + '\n')
-            f.write('\nsentence miss: ' + np.array2string(sentence_miss))
-
-            f.write('\nsamples_mcm: \n')
-            for k, v in sample_subclass_metrics.items():
-                f.write(str(k) + ': ' + ''.join(np.array2string(samples_mcm[k - 1]).splitlines())
-                        + '\t' + str(v) + '\n')
-        f.close()
-
-        return
-
-    def sample_cm(self):
-        subclass_mcm = np.empty([19, 2, 2], dtype=int)
-
-        for name, index in self.label_map.items():
-            one = self.data[name.replace('_sentence', '')].tolist()
-            tn = one.count(0)
-            fn = one.count(1)
-            tp = one.count(2)
-            fp = one.count(-1)
-            subclass_mcm[index - 1] = np.array([[tn, fp], [fn, tp]])
-
-        return subclass_mcm
+    #
+    # def misjudge_export(self, target_list, pred_list, sent_list, filename):
+    #     result_excel, labelnames, current = self._excel_init()
+    #     for target, pred, sentence in zip(target_list, pred_list, sent_list):
+    #         if target == pred:
+    #             continue
+    #         for i in range(len(target)):
+    #             sheet = result_excel.get_sheet(labelnames[i])
+    #             if target[i] == 1 and pred[i] == 0:  # 漏判
+    #                 sheet.write(current[labelnames[i]][0], 0, sentence)
+    #
+    #                 target_int = [i + 1 for i, x in enumerate(target) if x == 1]
+    #                 sheet.write(current[labelnames[i]][0], 1, str(target_int))
+    #                 pred_int = [i + 1 for i, x in enumerate(pred) if x == 1]
+    #                 sheet.write(current[labelnames[i]][0], 2, str(pred_int))
+    #                 current[labelnames[i]][0] += 1
+    #             elif target[i] == 0 and pred[i] == 1:  # 误判
+    #                 sheet.write(current[labelnames[i]][1], 3, sentence)
+    #
+    #                 target_int = [i + 1 for i, x in enumerate(target) if x == 1]
+    #                 sheet.write(current[labelnames[i]][1], 4, str(target_int))
+    #                 pred_int = [i + 1 for i, x in enumerate(pred) if x == 1]
+    #                 sheet.write(current[labelnames[i]][1], 5, str(pred_int))
+    #                 current[labelnames[i]][1] += 1
+    #             else:
+    #                 continue
+    #
+    #     result_excel.save(filename)
+    #     return
