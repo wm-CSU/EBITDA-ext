@@ -30,7 +30,7 @@ class pred_tools:
 
         self.dataset_tool = TestData(vocab_file, max_seq_len=max_seq_len)
         ori_data = read_annotation(filename=test_file, sheet_name=test_sheet)
-        self.data = Drop_Redundance(ori_data, 'data/adjust_test.xlsx', Train=False)
+        self.data = Drop_Redundance(ori_data, Train=False)
 
     def sent_data_align(self, sent_list, predictions, one_data):
         """
@@ -79,14 +79,7 @@ class Prediction(pred_tools):
     def evaluate_for_all(self, model, device,
                          to_file='data/predict.xlsx', to_sheet='Sheet1',
                          sigmoid_threshold=0.80):
-        '''
-        遍历测试集，逐条数据预测
-        :param model:
-        :param device:
-        :param to_file:
-        :param to_sheet:
-        :param multi_class:
-        :return:
+        ''' 遍历测试集，逐条数据预测
         '''
         for index, one in self.data.iterrows():
             filename = os.path.join(self.test_txt, index + '.txt')
@@ -119,7 +112,7 @@ class PredictionWithlabels(pred_tools):
 
     def evaluate_for_all(self, model, device,
                          to_file='data/predict.xlsx', to_sheet='Sheet1',
-                         metrics_save_file: str = 'result/result.txt',
+                         metrics_save_path: str = 'result/result',
                          sigmoid_threshold=0.80):
         '''
         遍历测试集，逐条数据预测
@@ -127,10 +120,11 @@ class PredictionWithlabels(pred_tools):
         :param device:
         :param to_file:
         :param to_sheet:
-        :param multi_class:
+        :param sigmoid_threshold:
         :return:
         '''
         target_list, pred_list, sent_list = [], [], []
+        b1_preds_list, b1_labels_list = [], []
         result_excel, labelnames, current = self.metrics.excel_init(self.label_map)
 
         for index, one in self.data.iterrows():
@@ -142,12 +136,15 @@ class PredictionWithlabels(pred_tools):
             one_loader = DataLoader(one_dataset, batch_size=1, shuffle=False)
             if not one_loader:
                 print('{} is null! Please change it.'.format(filename))
-            predictions, sent, labels = self.evaluator.evaluate2stage_with_labels(
+
+            predictions, sent, labels, b1_preds, b1_labels = self.evaluator.evaluate2stage_with_labels(
                 self.dataset_tool.tokenizer, model, one_loader, device, sigmoid_threshold
             )
             target_list.extend(labels)
             pred_list.extend(predictions)
             sent_list.extend(sent)
+            b1_preds_list.extend(b1_preds)
+            b1_labels_list.extend(b1_labels)
 
             result_excel, labelnames, current = self.metrics.misjudge_export(
                 filename=index, target_list=labels, pred_list=predictions, sent_list=sent,
@@ -156,14 +153,12 @@ class PredictionWithlabels(pred_tools):
 
             self.data.loc[index, :] = self.align_with_labels(sent, predictions=predictions, one_data=one)
 
-        self.data.to_excel(to_file, to_sheet)
-        result_excel.save('result/eval_yj_sentence.xls')
+        # self.data.to_excel(to_file, to_sheet)
+        result_excel.save(metrics_save_path + '-eval_yj_sentence.xls')
         self.metrics.metrics_output(pred_to_file=to_file, target_list=target_list, pred_list=pred_list,
-                                    sent_list=sent_list,
-                                    filename=metrics_save_file)
-        self.eval_yj(save_path='result/eval_yj.xls')
-        # self.misjudge_export(target_list=target_list, pred_list=pred_list, sent_list=sent_list,
-        #                      filename='result/eval_yj_sentence.xls')
+                                    sent_list=sent_list, b1_preds=b1_preds_list, b1_labels=b1_labels_list,
+                                    filename=metrics_save_path + '-metrics.txt')
+        self.eval_yj(save_path=metrics_save_path + '-eval_yj.xls')
 
         return
 
@@ -231,7 +226,7 @@ class PredictionWithlabels(pred_tools):
         result_excel.save(save_path)
 
         return
-    #
+    # unused func.
     # def misjudge_export(self, target_list, pred_list, sent_list, filename):
     #     result_excel, labelnames, current = self._excel_init()
     #     for target, pred, sentence in zip(target_list, pred_list, sent_list):

@@ -176,7 +176,7 @@ def get_label_cooccurance_matrix(labels, filename='result/co_mat.xlsx'):
     :param labels: dataset[-1] type:Tensor
     :return:
     """
-    class_label_counts = labels.sum(axis=0, keepdims=False, dtype=torch.int)
+    # class_label_counts = labels.sum(axis=0, keepdims=False, dtype=torch.int)
     label_number = labels.shape[1]
     co_mat = np.zeros((label_number, label_number), dtype=float)
     co_mat_normalization = np.zeros((label_number, label_number), dtype=float)
@@ -187,32 +187,60 @@ def get_label_cooccurance_matrix(labels, filename='result/co_mat.xlsx'):
             index = [i for i, x in enumerate(label) if x == 1]
             for i in range(len(index)):
                 for j in range(i, len(index)):
-                    co_mat[index[i], index[j]] += 1 / (one_num - 1)  # 得到的矩阵为上三角矩阵，最后记得复制到下三角即可
+                    co_mat[index[i], index[j]] += 1 / one_num  # 得到的矩阵为上三角矩阵，最后记得复制到下三角即可
+        elif one_num == 1:
+            index = label.index(1)
+            co_mat[index, index] += 1
         else:
             continue
 
     for a in range(label_number):
         for b in range(a + 1, label_number):
-            # if co_mat[a, b] < 1:  # 清除过低的共现情况
-            #     co_mat[a, b] = 0
+            if co_mat[a, b] < 0.5:  # 清除过低的共现情况
+                co_mat[a, b] = 0
             co_mat[b, a] = co_mat[a, b]
-        co_mat[a, a] += class_label_counts[a]
 
     for a in range(label_number):
         co_matSum = np.sum(co_mat[:, a])
         co_mat_normalization[:, a] = co_mat[:, a] / co_matSum
-    # co_mat 归一化
-    # co_matSum = np.sum(co_mat, axis=1)
-    # matMax, matMin = np.max(co_mat, axis=0), np.min(co_mat, axis=0)
-    # co_mat_normalization = (co_mat - matMin) / (matMax - matMin)
-    # co_mat_normalization = F.softmax(torch.Tensor(co_mat), dim=1)
+
     writer = pd.ExcelWriter(filename)
-    co_mat = pd.DataFrame(co_mat, index=list(range(1, co_mat.shape[0]+1)), columns=list(range(1, co_mat.shape[1]+1)))
-    co_mat.to_excel(writer, '共现矩阵')
-    normal = pd.DataFrame(co_mat_normalization, index=list(range(1, co_mat_normalization.shape[0]+1)),
-                          columns=list(range(1, co_mat_normalization.shape[1]+1)))
-    normal.to_excel(writer, '归一化结果', float_format='%.5f')
+    co_mat = pd.DataFrame(co_mat, index=list(range(1, co_mat.shape[0] + 1)),
+                          columns=list(range(1, co_mat.shape[1] + 1)))
+    co_mat.to_excel(writer, '共现矩阵', float_format='%.3f')
+
+    normal = pd.DataFrame(co_mat_normalization, index=list(range(1, co_mat_normalization.shape[0] + 1)),
+                          columns=list(range(1, co_mat_normalization.shape[1] + 1)))
+    normal.to_excel(writer, '归一化结果', float_format='%.3f')
     writer.save()
     writer.close()
 
     return co_mat_normalization
+
+
+def get_sampler(train_set):
+    from torch.utils.data.sampler import WeightedRandomSampler
+    # # with WeightedRandomSampler
+    target = train_set[:][-1]
+    class_sample_counts = target.sum(axis=0, keepdims=False, dtype=torch.float)
+    weights = 1. / class_sample_counts
+    mid = np.array([(weights * t).sum(axis=0, dtype=torch.float) for t in target])
+
+    print('采样前样例情况: ', (np.sum(mid == 0.), class_sample_counts))
+
+    samples_weights = np.where(mid == 0., 0.003, mid)
+    samples_weights = np.where(samples_weights > 0.1, 0.1, samples_weights)
+    sampler = WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights) // 4, replacement=True)
+
+    return sampler
+
+
+def static_loader(dataloader, num_classes):
+    sampler_target = torch.zeros(num_classes)
+    noise_sample = 0
+    for batch in dataloader:
+        sample = [1 for i in batch[-1][:] if i.equal(torch.zeros(num_classes, dtype=torch.long))]
+        noise_sample += sample.count(1)
+        sampler_target.add_(batch[-1].sum(axis=0, keepdims=False, dtype=torch.int))
+
+    return noise_sample, sampler_target

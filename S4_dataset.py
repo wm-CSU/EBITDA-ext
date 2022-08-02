@@ -121,6 +121,8 @@ class Data:
         ori_data = read_annotation(filename=filename, sheet_name=sheet_name)
         sent_list, label_list = [], []
 
+        f1 = open('data/used.txt', 'w+')
+        f2 = open('data/unused.txt', 'w+')
         division = Division(ori_data)
         for index, one in division.data.iterrows():
             filename = os.path.join(txt_path, index + '.txt')
@@ -130,16 +132,17 @@ class Data:
                 one = re.split('[\t\n]', line)
                 sent_list.append(self.tokenizer.tokenize(one[0]))
                 label_list.append(eval(one[1]))
-                #
-                # if eval(one[1]) != [0] * division.num_classes:
-                #     for _ in range(4):
-                #         sent_list.append(self.tokenizer.tokenize(one[0]))
-                #         label_list.append(eval(one[1]))
+
+                if eval(one[1]) != [0] * division.num_classes:
+                    f1.write('1: ' + one[0] + '\n')
+                else:
+                    f2.write('0: ' + one[0] + '\n')
             # print('{} is loaded.'.format(filename))
+        f1.close()
+        f2.close()
+        dataset, b2set = self._convert_sentence_to_bert_dataset(sent_list, label_list)
 
-        dataset = self._convert_sentence_to_bert_dataset(sent_list, label_list)
-
-        return dataset, label_list
+        return dataset, b2set, label_list
 
     def load_train_and_valid_files(self,
                                    train_file, train_sheet, train_txt, split_ratio=0.7):
@@ -153,11 +156,12 @@ class Data:
             all are torch.utils.data.TensorDataset
         """
         print('Loading train records for train...')
-        mydataset, labels = self.load_file(train_file, sheet_name=train_sheet, txt_path=train_txt)
+        mydataset, b2set, _ = self.load_file(train_file, sheet_name=train_sheet, txt_path=train_txt)
         train_set, valid_set = self.dataset_split(mydataset, split_ratio)
-        print(len(train_set), 'train records loaded.', len(valid_set), 'valid records loaded.')
+        print(len(train_set), 'train records loaded.', len(b2set), 'train for branch 2 records loaded.',
+              len(valid_set), 'valid records loaded.')
 
-        return train_set, valid_set
+        return train_set, valid_set, b2set
 
     def dataset_split(self, dataset, split_ratio=0.7):
         train, valid = random_split(
@@ -185,6 +189,7 @@ class Data:
                     each record: (input_ids, input_mask, segment_ids)
         """
         all_input_ids, all_input_mask, all_segment_ids = [], [], []
+        b2_input_ids, b2_input_mask, b2_segment_ids, b2_labels = [], [], [], []
         for i, _ in tqdm(enumerate(sent_list), ncols=80):
             tokens = ['[CLS]'] + sent_list[i] + ['[SEP]']
             # segment_ids = [0] * len(tokens)
@@ -200,15 +205,25 @@ class Data:
             all_input_ids.append(input_ids)
             all_input_mask.append(input_mask)
             all_segment_ids.append(segment_ids)
+            if label_list and sum(label_list[i]) != 0:
+                b2_input_ids.append(input_ids)
+                b2_input_mask.append(input_mask)
+                b2_segment_ids.append(segment_ids)
+                b2_labels.append(label_list[i])
 
         all_input_ids = torch.tensor(all_input_ids, dtype=torch.long)
         all_input_mask = torch.tensor(all_input_mask, dtype=torch.long)
         all_segment_ids = torch.tensor(all_segment_ids, dtype=torch.long)
+        b2_input_ids = torch.tensor(b2_input_ids, dtype=torch.long)
+        b2_input_mask = torch.tensor(b2_input_mask, dtype=torch.long)
+        b2_segment_ids = torch.tensor(b2_segment_ids, dtype=torch.long)
+        b2_labels = torch.tensor(b2_labels, dtype=torch.long)
 
-        if label_list:  # train
+        if label_list or (sent_list==[] and label_list==[]):  # train
             all_label_ids = torch.tensor(label_list, dtype=torch.long)
-            return TensorDataset(
-                all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+            return TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids),\
+                   TensorDataset(b2_input_ids, b2_input_mask, b2_segment_ids, b2_labels)
+
         # test
         return TensorDataset(
             all_input_ids, all_input_mask, all_segment_ids)
@@ -265,7 +280,7 @@ class TestData:
         for sent in sentences:
             sent_list.append(self.tokenizer.tokenize(sent))
 
-        dataset = self.datatool._convert_sentence_to_bert_dataset(sent_list, [])
+        dataset = self.datatool._convert_sentence_to_bert_dataset(sent_list)
 
         return dataset
 
@@ -289,7 +304,7 @@ class TestData:
             sent_list.append(self.tokenizer.tokenize(sent))
             labels_list.append(one_label[sent.strip()])
 
-        dataset = self.datatool._convert_sentence_to_bert_dataset(sent_list, labels_list)
+        dataset, _ = self.datatool._convert_sentence_to_bert_dataset(sent_list, labels_list)
 
         return dataset, labels_list
 
@@ -316,7 +331,7 @@ class TestData:
         sent_list, label_list = [], []
 
         from S1_preprocess import Drop_Redundance
-        data = Drop_Redundance(ori_data, 'data/adjust_test.xlsx', Train=False)
+        data = Drop_Redundance(ori_data, Train=False)
         division = Division(data)
         for index, one in data.iterrows():
             filename = os.path.join(txt_path, index + '.txt')

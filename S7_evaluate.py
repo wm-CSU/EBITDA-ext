@@ -11,11 +11,9 @@ import xlwt
 import torch
 from torch import nn
 from tqdm import tqdm
-from sklearn.metrics import accuracy_score, f1_score, precision_recall_fscore_support, multilabel_confusion_matrix
+from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score, precision_recall_fscore_support,
+                             multilabel_confusion_matrix, confusion_matrix)
 import fire
-
-LABELS = ['1', '2', '3', '4', '5', '6', '7', '8', '9',
-          '10', '11', '12', '13', '14', '15', '16', '17', '18', '19']
 
 
 class Metrics:
@@ -35,10 +33,26 @@ class Metrics:
         Returns:
             accuracy, f1 score
         """
+        LABELS = ['1', '2', '3', '4', '5', '6', '7', '8', '9',
+                  '10', '11', '12', '13', '14', '15', '16', '17', '18', '19']
         return accuracy_score(golds, predicts), \
                f1_score(
                    golds, predicts,
                    labels=LABELS, average='macro')
+
+    def compute_metrics_b1(self, labels, preds):
+        precision = precision_score(labels, preds, )
+        recall = recall_score(labels, preds, )
+        f1 = f1_score(labels, preds, )
+        acc = accuracy_score(labels, preds)
+        mcm = confusion_matrix(labels, preds)
+        return {
+            'accuracy': acc,
+            'precision': precision,
+            'recall': recall,
+            'f1': f1,
+            'confusion_matrix': mcm,
+        }
 
     def subclass_confusion_matrix(self, targetSrc, predSrc):
         # targetSrc = [[0, 1, 1, 1], [0, 0, 1, 0], [1, 0, 0, 1], [1, 1, 1, 0], [1, 0, 0, 0]]
@@ -117,19 +131,22 @@ class Metrics:
 
         return np.around(confusion_matrix, 3), miss_sample
 
-    def metrics_output(self, pred_to_file, target_list, pred_list, sent_list,
+    def metrics_output(self, pred_to_file, target_list, pred_list, sent_list, b1_preds, b1_labels,
                        filename: str = 'result/result.txt', ):
         sentence_mcm = self.subclass_confusion_matrix(targetSrc=target_list, predSrc=pred_list)
         sentence_subclass_metrics = self.perf_measure(sentence_mcm)
         sentence_total_cm, sentence_miss = self.statistic_misjudgement(labels=target_list, preds=pred_list,
-                                                                               sent=sent_list)
+                                                                       sent=sent_list)
         result = self.compute_metrics(labels=target_list, preds=pred_list)
-
+        b1_result = self.compute_metrics_b1(labels=b1_labels, preds=b1_preds, )
+        print(b1_result)
         # samples_mcm = self.sample_cm()
         # sample_subclass_metrics = self.perf_measure(samples_mcm)
 
         with open(filename, 'a+') as f:
             f.write('\n\n\n' + time.asctime() + '   PredictionWithlabels    ->  ' + pred_to_file + '\n')
+            f.write('branch 1:  ' + str([str(k) + ': ' + str(format(v, '.6f')) for k, v in b1_result.items() if
+                    k != 'confusion_matrix']) + ''.join(np.array2string(b1_result['confusion_matrix']).splitlines()) + '\n')
             f.write(str([str(k) + ': ' + str(format(v, '.6f')) for k, v in result.items() if
                          k != 'subclass_confusion_matrix']) + '\n')
 
@@ -220,6 +237,9 @@ class Evaluator:
         """Initialize my evaluator.
         """
         super(Evaluator, self).__init__()
+        # , model, device
+        # self.model = model
+        # self.device = device
 
     def evaluate(slef, tokenizer, model, data_loader, device, sigmoid_threshold=0.80):
         """Evaluate model on data loader in device.
@@ -303,6 +323,7 @@ class Evaluator:
     def evaluate2stage_with_labels(self, tokenizer, model, data_loader, device, sigmoid_threshold):
         model.eval()
         answer_list, sent_list, labels = [], [], []
+        b1_preds, b1_labels = [], []
         for batch in tqdm(data_loader, desc='Evaluation:', ascii=True, ncols=80, leave=True, total=len(data_loader)):
             batch = tuple(t.to(device) for t in batch)
             with torch.no_grad():
@@ -311,16 +332,31 @@ class Evaluator:
             if not to_index.numel():
                 continue
 
+            # pred_b1 = nn.Sigmoid()(logits)  # , dim=1
+            # index_b1 = torch.unsqueeze(torch.max(batch[-1], dim=1).values, 1)
+            # # target (batch_size, 19) -> (batch_size, 2)
+            # target_b1 = torch.zeros(batch[0].shape[0], 2).to(device).scatter_(1, index_b1, 1)
+
+            pred_b1 = torch.max(nn.functional.softmax(logits, dim=1), dim=1).indices  # (batchsize, 1)
+            b1_preds.extend(pred_b1.detach().cpu().numpy().tolist())
+
+            index_b1 = torch.unsqueeze(torch.max(batch[-1], dim=1).values, 1)
+            mid = torch.zeros(1, 2).to(device).scatter_(1, index_b1, 1)
+            target_b1 = torch.max(mid, dim=1).indices
+            b1_labels.extend(target_b1.detach().cpu().numpy().tolist())
+
             target_b2 = torch.index_select(batch[-1].long(), 0, to_index.to(device))
             labels.extend(target_b2.detach().cpu().numpy().tolist())
 
             goal_sent = torch.index_select(batch[0].long(), 0, to_index.to(device))
             sent_list.extend([tokenizer.decode(x, skip_special_tokens=True) for x in goal_sent])
 
-            predictions = nn.Sigmoid()(logits2)
-            compute_pred = [[1 if one > sigmoid_threshold else 0 for one in row] for row in
-                            predictions.detach().cpu().numpy().tolist()]
+            predictions = nn.Sigmoid()(logits2).detach().cpu().numpy().tolist()
+            compute_pred = [[1 if one > sigmoid_threshold else 0 for one in row] for row in predictions]
+            for idx, pred in enumerate(compute_pred):
+                if pred == [0] * len(pred):
+                    pred[predictions[idx].index(max(predictions[idx]))] = 1
+                    compute_pred[idx] = pred
             answer_list.extend(compute_pred)  # multi-class
 
-        return answer_list, sent_list, labels
-
+        return answer_list, sent_list, labels, b1_preds, b1_labels

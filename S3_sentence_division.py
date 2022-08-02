@@ -36,6 +36,7 @@ class Division:
                 self.label2txt(label_dict=one_label, filename=toname)
             else:
                 labels.append({})
+            print(filename, 'is dealed.')
 
         return labels
 
@@ -48,7 +49,9 @@ class Division:
                     continue
                 mid = self.sent_split(paragraph=para)
                 para2sent = self.sent_resplit(paragraph=mid)
-                sentence.extend(para2sent)
+                for one in para2sent:
+                    sentence.append(self.sent_process(one))
+                # sentence.extend(para2sent)
         f.close()
 
         return [x for x in sentence if x != '']
@@ -68,7 +71,7 @@ class Division:
 
     def sent_resplit(self, paragraph):
         for para in paragraph:
-            if len(para) > 600:  # resplit
+            if len(para.split()) > 100:  # resplit
                 re_sent = re.split(',|\(.{5,}?\)', para.strip())
                 # 保留分割符号，置于句尾，比如标点符号
                 seg_word = re.findall(',|\(.{5,}?\)', para.strip())
@@ -134,6 +137,18 @@ class Division:
 
         return
 
+    def sent_process(self, para: str = None):
+        para = re.sub(r'[*_+0-9]', '', para)
+        words = para.split()
+        need_del = []
+        for index, word in enumerate(words):
+            if not bool(re.search(r'[a-zA-Z]', word)):
+                need_del.append(index)
+        for i in sorted(need_del, reverse=True):
+            del words[i]
+
+        return ' '.join(words)
+
 
 if __name__ == '__main__':
     txt_set = r'data/txt_set/'
@@ -146,10 +161,6 @@ if __name__ == '__main__':
     # data = ext.deal(input_path=txt_set, output_path=ebitda_txt)
     division = Division(ori_data)
     division.deal(label_map=r'data/label_map.json', txtfilepath=ebitda_txt, labelfilepath=multi_class_sent_txt)
-    # filename = os.path.join('data/adjust_txt/1031316_117152011000151_2.txt')
-    # toname = os.path.join('data/sent_multi_label1031316_117152011000151_2.txt')
-    # if os.path.isfile(filename):
-    #     one_sent = division.txt2sent(filename=filename)
 
     # # test
     # multi_class_test_sent_txt = r'data/sent_multi_label'

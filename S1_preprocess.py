@@ -8,10 +8,9 @@ import os.path
 from utils import read_annotation, move_txt
 
 
-def Drop_Redundance(data,
+def Drop_Redundance(data, Train: bool = True,
                     excel_path: str = r'data/new.xlsx',
                     sheet_name: str = 'Sheet1',
-                    Train: bool = True
                     ):
     '''
     包括：调整sentence keywords名称；未标注数据删除（没有文件）；重复数据删除（相同文件）；
@@ -55,7 +54,7 @@ def Drop_Redundance(data,
     data.dropna(axis=0, subset=['file_name'], inplace=True)
     data.drop_duplicates(subset=['file_name'], inplace=True)
 
-    data.to_excel(excel_path, sheet_name=sheet_name)
+    # data.to_excel(excel_path, sheet_name=sheet_name)
 
     return data
 
