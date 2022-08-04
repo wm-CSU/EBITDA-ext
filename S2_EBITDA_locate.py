@@ -9,7 +9,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from utils import get_path, read_annotation
+from utils import get_path, read_annotation, sent_process
 from S1_preprocess import Drop_Redundance
 
 
@@ -184,7 +184,7 @@ class Paragraph_Extract:
         ori_txt = f.readlines()
         paragraph = self.text2paragraph(ori_txt)
         # 构造正则表达式的pattern
-        ebitda = re.compile(r'^[\s\S]{0,200}EBIT[\s\S]{0,50}?(?:mean|:|\.|—)')
+        ebitda = re.compile(r'^[\s\S]{0,200}(EBIT|EBT|Special Charges)[\s\S]{0,50}?(?:mean|:|\.|—)')
         net_income_place = re.compile(r'^[\s\S]{0,200}Net Income[\s\S]{0,50}?(?:mean|:|\.)')
 
         # 逐段遍历找到段落
@@ -249,20 +249,11 @@ class Paragraph_Extract:
                     para = ' '.join([para, line.strip()])
                     Segment = False
 
-            # if Page_continue:
-            #     Segment = False
-            #     para = ' '.join([para, line.strip()])
-            # elif Segment:
-            #     paralist.append(para.replace('\xa0', ' '))
-            #     para = line.strip()
-            #     Segment = False
-            # else:
-            #     para = ' '.join([para, line.strip()])
             Page_continue = False if punctuation.match(para) else True
 
         paralist.append(para)
 
-        if len(paralist) < 350 or sum(len(i) > 4000 for i in paralist)>30:
+        if len(paralist) < 350 or sum(len(i.split()) > 800 for i in paralist) > 30:
             paralist = self.post_processing(paralist)
 
         return paralist
@@ -274,36 +265,39 @@ class Paragraph_Extract:
         :return: paragraph: [str]
         '''
         # 删去过短的元素
-        paragraph = [x for x in paragraph if len(x) >= 10]
+        paragraph = [x for x in paragraph if len(x.strip()) >= 10]
         post_para = []
         for para in paragraph:
             # res = re.split(r'(?<=\.)([\s]*?“.+?”.*?(?:mean|:)+?.*?\.[\s]*?)(?=“)', para)
-            res = re.split(r'(?<=(\.|:))([\s]*?[0-9]*?[\s]*?“.+?”.*?\.[\s]*?[0-9]*?[\s]*?)(?=“)', para)
+            res = re.split(r'(?<=(\.|:))([\s]*?[0-9]*?[\s]*?“.+?”.*?(?<!(No|no))\.[\s]*?[0-9]*?[\s]*?)(?=“)', para)
             res = [i for i in res if i]
             if res:
                 post_para.extend(res)
             else:
-                res3 = re.split(r'(?<=\.)([\s]*?.*?\.[\s]*?)', para)
+                # para = sent_process(para)
+                res3 = re.split(r'(?<=\.)([\s]*?.*?(?<!(No|no))\.[\s]*)', para)
                 post_para.extend([i for i in res3 if i])
 
         post_para = [i for i in post_para if 10 <= len(i) < 100000]
 
-        if len(paragraph) < 350:
+        if len(post_para) < 350:
             post_para = self.twice_post_processing(post_para)
 
         return post_para
 
     def twice_post_processing(self, paragraph):
         # 删去过短的元素
-        paragraph = [x for x in paragraph if len(x) >= 10]
         post_para = []
         for para in paragraph:
-            res = re.split(r'(?<=(\.))([\s]*?.*?(?:mean|:).*?\.+?[\s]*?)', para)
+            if len(para.split()) <= 800:
+                post_para.append(para)
+                continue
+            res = re.split(r'(?<=(\.))([\s]*?.*?(?:mean|:).*?(?<!(No|no))\.+?[\s]*?)', para)
             res = [i for i in res if i]
             if res:
                 post_para.extend(res)
             else:
-                res3 = re.split(r'(?<=\.)([\s]*?.*?\.[\s]*?)', para)
+                res3 = re.split(r'(?<=\.)([\s]*?.*?(?<!(No|no))\.[\s]*?)', para)
                 post_para.extend([i for i in res3 if i])
 
         post_para = [i for i in post_para if 10 <= len(i) < 100000]
@@ -321,37 +315,36 @@ if __name__ == '__main__':
     # ori_data1 = read_annotation(filename=r'data/train.xlsx', sheet_name='Sheet1')
     # ext1 = Paragraph_Extract(ori_data1, Train=False)
     # start = time.time()
-    # ext1.deal(input_path=r'data/txt_set/', output_path=r'data/adjust_txt/')
+    # ext1.deal(input_path=r'data/train_txt/', output_path=r'data/train_adjust_txt/')
     # end = time.time()
     # print('time: {} s'.format(end - start))
 
     ori_data3 = read_annotation(filename=r'data/test_yqhlqj_with answer.xlsx', sheet_name='Sheet1')
     ext3 = Paragraph_Extract(ori_data3, Train=False)
     start = time.time()
-    ext3.deal(input_path=r'data/test_txt_set/', output_path=r'data/test_adjust_txt/')
-    # filename = 'data/test_txt_set/909111_90911112000046_3.txt'
-    # out_filename = 'data/test_adjust_txt/909111_90911112000046_3.txt'
+    ext3.deal(input_path=r'data/test_txt/', output_path=r'data/test_adjust_txt/')
+    end = time.time()
+    print('time: {} s'.format(end - start))
+    # one file debug
+    # filename = 'data/test_txt/1408075_140807512000016_2.txt'
+    # out_filename = 'data/test_adjust_txt/1408075_140807512000016_2.txt'
     # if os.path.isfile(filename):
     #     goal_para, nest = ext3.goal_locate(filename)
     #     ext3.to_txt(goal_para, out_filename)
     #     print("{} is dealed.".format(filename))
     # else:
     #     print("ERROR! File {} is not accessible.".format(filename))
-    end = time.time()
-    print('time: {} s'.format(end - start))
-    # time: 29.095494270324707 s (only batch one);  time: 51.8917932510376 s (all data);
-    # time: 21.19935655593872 s(test_set)
-
-    test = 'the United States. Average Distribution Availability mean as of any applicable date of a Distribution ' \
-           'and for the thirty-day ' \
-           'period ending as of such date, the thirty-day average of (a) the Borrowers’ Availability plus ' \
-           '(b) all U.S. cash (including U.S. money market investments) of Borrowers that is either (i) pledged' \
-           ' to only to Agent and in which Agent (and no other Person) has a perfected security interest or ' \
-           '(ii) not subject to any Lien. Bank of America mean Bank of America, N.A., a national banking association,' \
-           ' and its successors and assigns.Dominion Account mean a special account established by Borrowers at Bank of ' \
-           'America or another bank acceptable to Agent, over which Agent has control.EBITDA” mean determined on a consolidated basis for Borrowers and ' \
-           'Subsidiaries, net income, calculated before interest.“Bank of America Indemnitees” mean Bank of America and.'
-    res = re.split(r'(?<=(\.))([\s]*?.*?(?:mean|:).*?\.+?[\s]*?)', test)
-    # res = re.split(r'(?<=(\.|:))([\s]*?[0-9]*?[\s]*?“.+?”.*?\.[\s]*?[0-9]*?[\s]*?)(?=“)', test)
-    print(res)
+    #
+    # test = 'the United States. Average Distribution Availability mean as of any applicable date of a Distribution ' \
+    #        'and for the thirty-day ' \
+    #        'period ending as of such date, the thirty-day average of (a) the Borrowers’ Availability plus ' \
+    #        '(b) all U.S. cash (including U.S. money market investments) of Borrowers that is either (i) pledged' \
+    #        ' to only to Agent and in which Agent (and no other Person) has a perfected security interest or ' \
+    #        '(ii) not subject to any Lien. Bank of America mean Bank of America, N.A., a national banking association,' \
+    #        ' and its successors and assigns.Dominion Account mean a special account established by Borrowers at Bank of ' \
+    #        'America or another bank acceptable to Agent, over which Agent has control.EBITDA” mean determined on a consolidated basis for Borrowers and ' \
+    #        'Subsidiaries, net income, calculated before interest.“Bank of America Indemnitees” mean Bank of America and.'
+    # res = re.split(r'(?<=(\.))([\s]*?.*?(?:mean|:).*?\.+?[\s]*?)', test)
+    # # res = re.split(r'(?<=(\.|:))([\s]*?[0-9]*?[\s]*?“.+?”.*?\.[\s]*?[0-9]*?[\s]*?)(?=“)', test)
+    # print(res)
     pass

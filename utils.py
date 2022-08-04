@@ -129,6 +129,19 @@ def move_txt(soure_file, dirname):
         print('err', e)
 
 
+def sent_process(para: str = None) -> str:
+    para = re.sub(r'[*_+0-9]', '', para)
+    words = para.split()  # 若改用 bert-base-uncased 模型，此处的 lower 应取消！！！
+    need_del = []
+    for index, word in enumerate(words):
+        if not bool(re.search(r'[a-zA-Z]', word)):
+            need_del.append(index)
+    for i in sorted(need_del, reverse=True):
+        del words[i]
+
+    return ' '.join(words)
+
+
 def load_torch_model(model, model_path,
                      multi_gpu: bool = False):
     """Load state dict to model.

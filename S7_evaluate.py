@@ -133,6 +133,7 @@ class Metrics:
 
     def metrics_output(self, pred_to_file, target_list, pred_list, sent_list, b1_preds, b1_labels,
                        filename: str = 'result/result.txt', ):
+        print('Start calculating evaluation indicators...')
         sentence_mcm = self.subclass_confusion_matrix(targetSrc=target_list, predSrc=pred_list)
         sentence_subclass_metrics = self.perf_measure(sentence_mcm)
         sentence_total_cm, sentence_miss = self.statistic_misjudgement(labels=target_list, preds=pred_list,

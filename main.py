@@ -93,6 +93,7 @@ def main(config_file='config/bert_config.json',
     model.to(device)
 
     if need_train:
+
         # 3. Train
         trainer = Trainer(model=model, data_loader=data_loader,
                           device=device, config=config)

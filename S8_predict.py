@@ -152,7 +152,7 @@ class PredictionWithlabels(pred_tools):
             )
 
             self.data.loc[index, :] = self.align_with_labels(sent, predictions=predictions, one_data=one)
-
+        print('pred success.')
         # self.data.to_excel(to_file, to_sheet)
         result_excel.save(metrics_save_path + '-eval_yj_sentence.xls')
         self.metrics.metrics_output(pred_to_file=to_file, target_list=target_list, pred_list=pred_list,
