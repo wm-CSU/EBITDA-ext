@@ -3,6 +3,7 @@
 
 Author: Min Wang; wangmin0918@csu.edu.cn
 """
+import time
 import difflib
 import json
 import os.path
@@ -34,9 +35,10 @@ class Division:
                 one_label = self.sent_label(one_data=one, one_sent=one_sent, label_map=label_map)
                 labels.append(one_label)
                 self.label2txt(label_dict=one_label, filename=toname)
+                print('sentence divide:  ', filename, 'is dealed.')
             else:
                 labels.append({})
-            print(filename, 'is dealed.')
+                print('sentence divide:  ', filename, 'is not filename.')
 
         return labels
 
@@ -114,7 +116,7 @@ class Division:
         for (name, value) in one_data.items():
             if pd.isna(value):
                 continue
-            elif 'sentence' in name:
+            elif 'sentence' in name or 'Sentence' in name:
                 value = value.replace('，', ',')
                 for sent in one_sent:
                     if self._determine_same(sent, value) > 0.9:
@@ -158,15 +160,30 @@ class Division:
 
 
 if __name__ == '__main__':
+    # TRAIN_NAMES = ['蔡子悦', '高尚', '李佳慧', '马成辰', '宋瑶', '童婧曦', '王珏']
+    TRAIN_NAMES = ['caiziyue', 'gaoshang', 'lijiahui', 'machengchen', 'songyao', 'tongjingxi', 'wangjue']
+    for name in TRAIN_NAMES:
+        filename = 'data/train_file/' + name + '.xlsx'
+        ori_data = read_annotation(filename=filename, sheet_name='Sheet1')
+        ext = Paragraph_Extract(ori_data, Train=False)
+        start = time.time()
+        # data = ext.deal(input_path=os.path.join('data/train_txt/', name),
+        #                 output_path=os.path.join(r'data/train_adjust_txt/', name))
+        division = Division(ori_data, Train=True)
+        division.deal(label_map=r'data/label_map.json', txtfilepath=os.path.join(r'data/train_adjust_txt/', name),
+                      labelfilepath=os.path.join(r'data/sent_multi_label/', name))
+        end = time.time()
+        print('{} use time: {} s'.format(name, end - start))
+
     txt_set = r'data/txt_set/'
     ebitda_txt = r'data/train_adjust_txt/'
     multi_class_sent_txt = r'data/sent_multi_label'
     # 两批数据处理
-    ori_data = read_annotation(filename=r'data/train.xlsx', sheet_name='Sheet1')
-    # ext = Paragraph_Extract(ori_data)
-    # data = ext.deal(input_path=txt_set, output_path=ebitda_txt)
-    division = Division(ori_data)
-    division.deal(label_map=r'data/label_map.json', txtfilepath=ebitda_txt, labelfilepath=multi_class_sent_txt)
+    # ori_data = read_annotation(filename=r'data/train.xlsx', sheet_name='Sheet1')
+    # # ext = Paragraph_Extract(ori_data)
+    # # data = ext.deal(input_path=txt_set, output_path=ebitda_txt)
+    # division = Division(ori_data, Train=False)
+    # division.deal(label_map=r'data/label_map.json', txtfilepath=ebitda_txt, labelfilepath=multi_class_sent_txt)
     # # test
     # multi_class_test_sent_txt = r'data/sent_multi_label'
     # ori_data = read_annotation(filename=r'data/batch_test.xlsx', sheet_name='Sheet1')

@@ -159,15 +159,15 @@ class Paragraph_Extract:
     def deal(self, input_path, output_path):
         get_path(output_path)
         for index, row in self.data.iterrows():
-            filename = input_path + str(index) + '.txt'
-            out_filename = output_path + str(index) + '.txt'
+            filename = os.path.join(input_path, str(index) + '.txt')
+            out_filename = os.path.join(output_path, str(index) + '.txt')
             if os.path.isfile(filename):
                 goal_para, nest = self.goal_locate(filename)
                 self.to_txt(goal_para, out_filename)
                 # row['nest'] = 1 if nest else 0
-                print("{} is dealed.".format(filename))
+                print("EBITDA locate:  {} is dealed.".format(filename))
             else:
-                print("ERROR! File {} is not accessible.".format(filename))
+                print("~~~~~~ERROR!!! File {} is not accessible.".format(filename))
 
         return self.data
 
@@ -184,7 +184,7 @@ class Paragraph_Extract:
         ori_txt = f.readlines()
         paragraph = self.text2paragraph(ori_txt)
         # 构造正则表达式的pattern
-        ebitda = re.compile(r'^[\s\S]{0,200}(EBIT|EBT|Special Charges)[\s\S]{0,50}?(?:mean|:|\.|—)')
+        ebitda = re.compile(r'^[\s\S]{0,200}(EBIT| EBT|Special Charges)[\s\S]{0,50}?(?:mean|:|\.|—)')
         net_income_place = re.compile(r'^[\s\S]{0,200}Net Income[\s\S]{0,50}?(?:mean|:|\.)')
 
         # 逐段遍历找到段落
@@ -236,9 +236,7 @@ class Paragraph_Extract:
         page_number = re.compile(r'^(.*?[0-9]+)$|^(.*?- [0-9]+ -)$|^(.*?-[0-9]+-)$|^(.*?Page [0-9]+)$')
         text = [line for line in text if not page_number.match(line.strip())]
         for line in text:
-            # if line.strip() == '' and punctuation.match(para):
             if line.strip() == '':
-                # if line.strip() == '' or page_number.match(line.strip()):
                 Segment = True
             else:
                 if Segment and not Page_continue:
@@ -312,19 +310,28 @@ class Paragraph_Extract:
 
 
 if __name__ == '__main__':
-    # ori_data1 = read_annotation(filename=r'data/train.xlsx', sheet_name='Sheet1')
-    # ext1 = Paragraph_Extract(ori_data1, Train=False)
+    # ori_data = read_annotation(filename=r'data/todeal_2.xlsx', sheet_name='Sheet1')
+    # ext = Paragraph_Extract(ori_data, Train=False)
     # start = time.time()
-    # ext1.deal(input_path=r'data/train_txt/', output_path=r'data/train_adjust_txt/')
+    # print('start time: ', time.strftime('%Y-%m-%d %H:%M:%S'))
+    # ext.deal(input_path=r'data/todeal_2/', output_path=r'data/dealed_txt/A_2/')
     # end = time.time()
-    # print('time: {} s'.format(end - start))
+    # print('end time: ', time.strftime('%Y-%m-%d %H:%M:%S'))
+    # print('use time: {} s'.format(end - start))
+    # # todeal_1  start time:  2022-08-16 15:29:57;  end time:  2022-08-16 16:40:25;  use time: 4227.419719457626 s
+    # # todeal_2  start time:  2022-08-16 16:44:35;  end time:  2022-08-16 17:41:06;  use time: 3390.262848138809 s
+    # # todeal_3  start time:  2022-08-16 12:01:36;  end time:  2022-08-16 13:29:17;  use time: 5261.6615421772 s
 
-    ori_data3 = read_annotation(filename=r'data/test_yqhlqj_with answer.xlsx', sheet_name='Sheet1')
-    ext3 = Paragraph_Extract(ori_data3, Train=False)
-    start = time.time()
-    ext3.deal(input_path=r'data/test_txt/', output_path=r'data/test_adjust_txt/')
-    end = time.time()
-    print('time: {} s'.format(end - start))
+    TRAIN_NAMES = ['蔡子悦', '高尚', '李佳慧', '马成辰', '宋瑶', '童婧曦', '王珏']
+    for name in TRAIN_NAMES:
+        filename = 'data/train_file/' + name + '.xlsx'
+        ori_data3 = read_annotation(filename=filename, sheet_name='Sheet1')
+        ext3 = Paragraph_Extract(ori_data3, Train=False)
+        start = time.time()
+        ext3.deal(input_path=os.path.join('data/train_txt/', name),
+                  output_path=os.path.join(r'data/train_adjust_txt/', name))
+        end = time.time()
+        print('{} use time: {} s'.format(name, end - start))
     # one file debug
     # filename = 'data/test_txt/1408075_140807512000016_2.txt'
     # out_filename = 'data/test_adjust_txt/1408075_140807512000016_2.txt'
@@ -334,17 +341,5 @@ if __name__ == '__main__':
     #     print("{} is dealed.".format(filename))
     # else:
     #     print("ERROR! File {} is not accessible.".format(filename))
-    #
-    # test = 'the United States. Average Distribution Availability mean as of any applicable date of a Distribution ' \
-    #        'and for the thirty-day ' \
-    #        'period ending as of such date, the thirty-day average of (a) the Borrowers’ Availability plus ' \
-    #        '(b) all U.S. cash (including U.S. money market investments) of Borrowers that is either (i) pledged' \
-    #        ' to only to Agent and in which Agent (and no other Person) has a perfected security interest or ' \
-    #        '(ii) not subject to any Lien. Bank of America mean Bank of America, N.A., a national banking association,' \
-    #        ' and its successors and assigns.Dominion Account mean a special account established by Borrowers at Bank of ' \
-    #        'America or another bank acceptable to Agent, over which Agent has control.EBITDA” mean determined on a consolidated basis for Borrowers and ' \
-    #        'Subsidiaries, net income, calculated before interest.“Bank of America Indemnitees” mean Bank of America and.'
-    # res = re.split(r'(?<=(\.))([\s]*?.*?(?:mean|:).*?\.+?[\s]*?)', test)
-    # # res = re.split(r'(?<=(\.|:))([\s]*?[0-9]*?[\s]*?“.+?”.*?\.[\s]*?[0-9]*?[\s]*?)(?=“)', test)
-    # print(res)
+
     pass

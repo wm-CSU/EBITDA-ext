@@ -123,7 +123,7 @@ def move_txt(soure_file, dirname):
             new_file_abspath = os.path.join(dirname, ('(%s)%s' % ((max(ref_out) + 1), file_suffix)).join(
                 file_name.split('%s' % file_suffix)))
             shutil.move(soure_file, new_file_abspath)
-        print(new_file_abspath)
+        # print(new_file_abspath)
 
     except Exception as e:
         print('err', e)
@@ -235,15 +235,19 @@ def get_sampler(train_set):
     from torch.utils.data.sampler import WeightedRandomSampler
     # # with WeightedRandomSampler
     target = train_set[:][-1]
+
+    sample_label_counts = target.sum(axis=1, keepdims=False, dtype=torch.int)
+    print('采样前句子多标签情况: ', Counter(sample_label_counts.tolist()))
+
     class_sample_counts = target.sum(axis=0, keepdims=False, dtype=torch.float)
     weights = 1. / class_sample_counts
     mid = np.array([(weights * t).sum(axis=0, dtype=torch.float) for t in target])
 
     print('采样前样例情况: ', (np.sum(mid == 0.), class_sample_counts))
 
-    samples_weights = np.where(mid == 0., 0.003, mid)
+    samples_weights = np.where(mid == 0., 0.0025, mid)
     samples_weights = np.where(samples_weights > 0.1, 0.1, samples_weights)
-    sampler = WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights) // 4, replacement=True)
+    sampler = WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights) // 3, replacement=True)
 
     return sampler
 

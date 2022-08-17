@@ -61,7 +61,8 @@ def Drop_Redundance(data, Train: bool = True,
 
 def batch_move(data, ori_path, new_path):
     for index, row in data.iterrows():
-        ori_file = os.path.join(ori_path, index.split('_')[0], 'txt', index + '.txt')
+        # ori_file = os.path.join(ori_path, index.split('_')[0], 'txt', index + '.txt')
+        ori_file = os.path.join(ori_path, index + '.txt')
         print(ori_file)
         move_txt(ori_file, new_path)
 
@@ -70,19 +71,14 @@ def batch_move(data, ori_path, new_path):
 
 if __name__ == '__main__':
     #
-    # ori_data = read_annotation(filename=r'data/batch_one.xlsx', sheet_name='Sheet1')
-    # data = Drop_Redundance(ori_data, 'data/new.xlsx')
-    # batch_move(data, 'data/ori_txt', 'data/txt_set')
-    #
-    # # 第二批数据处理
-    # ori_data2 = read_annotation(filename=r'data/batch_two.xlsx', sheet_name='Sheet1')
-    # data2 = Drop_Redundance(ori_data2, 'data/new2.xlsx')
-    # batch_move(data2, 'data/ori_txt', 'data/txt_set')
+    ori_data = read_annotation(filename=r'D:/BaiduNetdiskDownload/todeal_3.xlsx', sheet_name='Sheet1')
+    # data = Drop_Redundance(ori_data)
+    batch_move(ori_data, r'D:/BaiduNetdiskDownload/todeal_txt', r'D:/BaiduNetdiskDownload/todeal_3')
     #
     # import pandas as pd
     # merge_data = pd.concat([data, data2])
     # merge_data.to_excel('data/merge_data.xlsx')
 
-    # 测试数据处理
-    ori_data = read_annotation(filename=r'data/test_lqj_with answer.xlsx', sheet_name='Sheet1')
-    batch_move(ori_data, r'E:/mycode/_DataSets/会计项目/林祺婧', r'E:/mycode/EBITDA-Ext/data/test_txt_set')
+    # # 测试数据处理
+    # ori_data = read_annotation(filename=r'data/test_lqj_with answer.xlsx', sheet_name='Sheet1')
+    # batch_move(ori_data, r'E:/mycode/_DataSets/会计项目/林祺婧', r'E:/mycode/EBITDA-Ext/data/test_txt_set')

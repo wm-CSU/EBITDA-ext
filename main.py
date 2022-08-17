@@ -24,6 +24,8 @@ from utils import load_torch_model, get_path, get_label_cooccurance_matrix, get_
 
 LABELS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
           '10', '11', '12', '13', '14', '15', '16', '17', '18', '19']
+# TRAIN_NAMES = ['train', '蔡子悦', '高尚', '李佳慧', '马成辰', '宋瑶', '童婧曦', '王珏']
+TRAIN_NAMES = ['train', 'caiziyue', 'gaoshang', 'lijiahui', 'machengchen', 'songyao', 'tongjingxi', 'wangjue']
 
 
 def main(config_file='config/bert_config.json',
@@ -57,14 +59,14 @@ def main(config_file='config/bert_config.json',
     # changed_tokenizer.save_pretrained(config.model_path)
 
     datasets = data.load_train_and_valid_files(
-        train_file=config.train_file, train_sheet=config.train_sheet, train_txt=config.train_txt, split_ratio=0.9
+        train_list=TRAIN_NAMES, train_sheet=config.train_sheet, train_txt=config.train_txt, split_ratio=0.9
     )
     train_set, valid_set_train, train_b2set = datasets
 
     label_set = train_set[:][-1].sum(axis=1, keepdims=False, dtype=torch.float)
-    print('训练集无用句子: {}; 有用句子: {}'.format(sum(i == 0 for i in label_set), sum(i > 0 for i in label_set)))
+    print('训练集  无标签句子: {}; 有标签句子: {}'.format(sum(i == 0 for i in label_set), sum(i > 0 for i in label_set)))
     valid_label_set = valid_set_train[:][-1].sum(axis=1, keepdims=False, dtype=torch.float)
-    print('验证集无用句子: {}; 有用句子: {}'.format(sum(i == 0 for i in valid_label_set), sum(i > 0 for i in valid_label_set)))
+    print('验证集  无标签句子: {}; 有标签句子: {}'.format(sum(i == 0 for i in valid_label_set), sum(i > 0 for i in valid_label_set)))
     sampler = get_sampler(train_set)
     data_loader = {
         'train': DataLoader(
@@ -160,5 +162,5 @@ if __name__ == '__main__':
         '--local_rank', default=0,
         help='used for distributed parallel')
     args = parser.parse_args()
-    main(args.config_file, need_train=False, ReTrain=True)
+    main(args.config_file, need_train=True, ReTrain=True)
     # fire.Fire(main)
