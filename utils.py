@@ -245,7 +245,7 @@ def get_sampler(train_set):
 
     print('采样前样例情况: ', (np.sum(mid == 0.), class_sample_counts))
 
-    samples_weights = np.where(mid == 0., 0.0025, mid)
+    samples_weights = np.where(mid == 0., 0.002, mid)
     samples_weights = np.where(samples_weights > 0.1, 0.1, samples_weights)
     sampler = WeightedRandomSampler(weights=samples_weights, num_samples=len(samples_weights) // 3, replacement=True)
 

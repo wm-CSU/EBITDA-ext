@@ -131,6 +131,31 @@ class Metrics:
 
         return np.around(confusion_matrix, 3), miss_sample
 
+    def metrics_output_b1(self, pred_to_file, target_list, pred_list, sent_list,
+                          filename: str = 'result/result.txt', ):
+        print('Start calculating evaluation indicators...')
+        sentence_mcm = self.subclass_confusion_matrix(targetSrc=target_list, predSrc=pred_list)
+        sentence_subclass_metrics = self.perf_measure(sentence_mcm)
+        sentence_total_cm, sentence_miss = self.statistic_misjudgement(labels=target_list, preds=pred_list,
+                                                                       sent=sent_list)
+        result = self.compute_metrics(labels=target_list, preds=pred_list)
+
+        with open(filename, 'a+') as f:
+            f.write('\n\n\n' + time.asctime() + '   PredictionWithlabels    ->  ' + pred_to_file + '\n')
+            f.write(str([str(k) + ': ' + str(format(v, '.6f')) for k, v in result.items() if
+                         k != 'subclass_confusion_matrix']) + '\n')
+
+            f.write('sentence_mcm: \n')
+            for k, v in sentence_subclass_metrics.items():
+                f.write(str(k) + ': ' + ''.join(np.array2string(sentence_mcm[k - 1]).splitlines())
+                        + '\t' + str(v) + '\n')
+                f.write('   class misjudge:' + ''.join(np.array2string(sentence_total_cm[k - 1]).splitlines()) + '\n')
+            f.write('\nsentence miss: ' + np.array2string(sentence_miss))
+
+        f.close()
+
+        return
+
     def metrics_output(self, pred_to_file, target_list, pred_list, sent_list, b1_preds, b1_labels,
                        filename: str = 'result/result.txt', ):
         print('Start calculating evaluation indicators...')
@@ -147,7 +172,8 @@ class Metrics:
         with open(filename, 'a+') as f:
             f.write('\n\n\n' + time.asctime() + '   PredictionWithlabels    ->  ' + pred_to_file + '\n')
             f.write('branch 1:  ' + str([str(k) + ': ' + str(format(v, '.6f')) for k, v in b1_result.items() if
-                    k != 'confusion_matrix']) + ''.join(np.array2string(b1_result['confusion_matrix']).splitlines()) + '\n')
+                                         k != 'confusion_matrix']) + ''.join(
+                np.array2string(b1_result['confusion_matrix']).splitlines()) + '\n')
             f.write(str([str(k) + ': ' + str(format(v, '.6f')) for k, v in result.items() if
                          k != 'subclass_confusion_matrix']) + '\n')
 

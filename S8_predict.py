@@ -95,14 +95,14 @@ class Prediction(pred_tools):
         return
 
 
-class PredictionWithlabels(pred_tools):
+class PredictionWithlabels_b2(pred_tools):
     def __init__(self, vocab_file='',
                  max_seq_len: int = 512,
                  test_file='data/test.xlsx',
                  test_sheet='Sheet1',
                  test_txt='data/test_adjust_txt/'
                  ):
-        super(PredictionWithlabels, self).__init__(
+        super(PredictionWithlabels_b2, self).__init__(
             vocab_file, max_seq_len, test_file, test_sheet, test_txt)
 
         from S3_sentence_division import Division
@@ -255,3 +255,59 @@ class PredictionWithlabels(pred_tools):
     #
     #     result_excel.save(filename)
     #     return
+
+
+class PredictionWithlabels(PredictionWithlabels_b2):
+    def __init__(self, vocab_file='',
+                 max_seq_len: int = 512,
+                 test_file='data/test.xlsx',
+                 test_sheet='Sheet1',
+                 test_txt='data/test_adjust_txt/'
+                 ):
+        super(PredictionWithlabels, self).__init__(
+            vocab_file, max_seq_len, test_file, test_sheet, test_txt)
+
+        from S3_sentence_division import Division
+        self.division = Division(self.data)
+
+        self.metrics = Metrics()
+
+    def evaluate_for_all(self, model, device,
+                         to_file='data/predict.xlsx', to_sheet='Sheet1',
+                         metrics_save_path: str = 'result/result',
+                         sigmoid_threshold=0.80):
+        target_list, pred_list, sent_list = [], [], []
+        result_excel, labelnames, current = self.metrics.excel_init(self.label_map)
+
+        for index, one in self.data.iterrows():
+            filename = os.path.join(self.test_txt, index + '.txt')
+            one_sent = self.division.txt2sent(filename=filename)
+            one_label = self.division.sent_label(one_data=one, one_sent=one_sent,
+                                                 label_map=self.label_map)
+            one_dataset, _ = self.dataset_tool.load_one(one_sent=one_sent, one_label=one_label)
+            one_loader = DataLoader(one_dataset, batch_size=1, shuffle=False)
+            if not one_loader:
+                print('{} is null! Please change it.'.format(filename))
+
+            predictions, sent, labels = self.evaluator.evaluate_with_labels(
+                self.dataset_tool.tokenizer, model, one_loader, device, sigmoid_threshold
+            )
+            target_list.extend(labels)
+            pred_list.extend(predictions)
+            sent_list.extend(sent)
+
+            result_excel, labelnames, current = self.metrics.misjudge_export(
+                filename=index, target_list=labels, pred_list=predictions, sent_list=sent,
+                result_excel=result_excel, labelnames=labelnames, current=current
+            )
+
+            self.data.loc[index, :] = self.align_with_labels(sent, predictions=predictions, one_data=one)
+
+        print('pred success.')
+        # self.data.to_excel(to_file, to_sheet)
+        result_excel.save(metrics_save_path + '-eval_yj_sentence.xls')
+        self.metrics.metrics_output_b1(pred_to_file=to_file, target_list=target_list, pred_list=pred_list,
+                                    sent_list=sent_list, filename=metrics_save_path + '-metrics.txt')
+        self.eval_yj(save_path=metrics_save_path + '-eval_yj.xls')
+
+        return

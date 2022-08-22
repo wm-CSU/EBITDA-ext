@@ -15,15 +15,15 @@ import torch
 from torch.utils.data import DataLoader
 
 from S4_dataset import Data, TestData
-# from S5_model import BertForClassification
-# from S6_train import Trainer
-from S5_model2 import BertForClassification
-from S6_train2 import Trainer
+from S5_model import BertForClassification
+from S6_train import Trainer
+# from S5_model2 import BertForClassification
+# from S6_train2 import Trainer
 from S8_predict import Prediction
 from utils import load_torch_model, get_path, get_label_cooccurance_matrix, get_sampler, static_loader
 
 LABELS = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-          '10', '11', '12', '13', '14', '15', '16', '17', '18', '19']
+          '10', '11', '12', '13', '14', '15', '16', '17', '18']
 # TRAIN_NAMES = ['train', '蔡子悦', '高尚', '李佳慧', '马成辰', '宋瑶', '童婧曦', '王珏']
 TRAIN_NAMES = ['train', 'caiziyue', 'gaoshang', 'lijiahui', 'machengchen', 'songyao', 'tongjingxi', 'wangjue']
 

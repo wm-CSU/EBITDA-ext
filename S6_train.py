@@ -26,9 +26,8 @@ from copy import deepcopy
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
+from visdom import Visdom
 from tqdm import tqdm, trange
-from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from transformers.optimization import (
     AdamW, get_linear_schedule_with_warmup, get_constant_schedule)
 
@@ -41,6 +40,7 @@ from S5_loss import FocalLoss_MultiLabel
 class Trainer:
     """Trainer for bert-base-uncased.
     """
+
     def __init__(self,
                  model, data_loader: Dict[str, DataLoader],
                  device, config):
@@ -70,7 +70,8 @@ class Trainer:
         self.scheduler = self._get_scheduler()
         self.criterion = FocalLoss_MultiLabel()
         # self.criterion = nn.BCELoss()
-        self.writer = SummaryWriter()
+        self.viz = Visdom(env=self.config.experiment_name)
+        self.mymetrics = Metrics()
 
     def _get_optimizer(self):
         """Get optimizer for different models.
@@ -78,8 +79,7 @@ class Trainer:
         Returns:
             optimizer
         """
-        # # no_decay = ['bias', 'gamma', 'beta']
-        # no_decay = ['bias', 'LayerNorm.weight']
+        no_decay = ['bias', 'LayerNorm.weight']
         # optimizer_parameters = [
         #     {'params': [p for n, p in self.model.named_parameters()
         #                 if not any(nd in n for nd in no_decay)],
@@ -87,12 +87,23 @@ class Trainer:
         #     {'params': [p for n, p in self.model.named_parameters()
         #                 if any(nd in n for nd in no_decay)],
         #      'weight_decay_rate': 0.0}]
+        optimizer_parameters = [
+            {'params': [p for n, p in self.model.named_parameters()
+                        if p.requires_grad and not any(nd in n for nd in no_decay) and 'bert' in n],
+             'weight_decay_rate': 0.01, 'lr': self.config.lr_ptm},
+            {'params': [p for n, p in self.model.named_parameters()
+                        if p.requires_grad and not any(nd in n for nd in no_decay) and 'bert' not in n],
+             'weight_decay_rate': 0.01, 'lr': self.config.lr_others},
+            {'params': [p for n, p in self.model.named_parameters()
+                        if p.requires_grad and any(nd in n for nd in no_decay) and 'bert' in n],
+             'weight_decay_rate': 0.0, 'lr': self.config.lr_ptm},
+            {'params': [p for n, p in self.model.named_parameters()
+                        if p.requires_grad and any(nd in n for nd in no_decay) and 'bert' not in n],
+             'weight_decay_rate': 0.0, 'lr': self.config.lr_others},
+        ]
         optimizer = AdamW(
-            # [p for p in self.model.parameters() if p.requires_grad],
-            # optimizer_parameters,
-            # filter(lambda p: p.requires_grad, self.model.parameters()),
-            self.model.parameters(),
-            lr=self.config.lr,
+            optimizer_parameters,
+            # self.model.parameters(),
             betas=(0.9, 0.999),
             weight_decay=1e-8,
             correct_bias=False)
@@ -120,26 +131,24 @@ class Trainer:
         """
         self.model.eval()
         answer_list, labels = [], []
-        # for batch in tqdm(data_loader, desc='Evaluation', ascii=False, ncols=80, position=0, total=len(data_loader)):
         for _, batch in enumerate(data_loader):
             batch = tuple(t.to(self.device) for t in batch)
             with torch.no_grad():
                 logits, _ = self.model(*batch[:-1])
             labels.extend(batch[-1].detach().cpu().numpy().tolist())
-            # answer_list.extend(torch.argmax(logits, dim=1).detach().cpu().numpy().tolist())  # single-class
             predictions = nn.Sigmoid()(logits)
-            compute_pred = [[1 if one > 0.70 else 0 for one in row] for row in
+            compute_pred = [[1 if one > self.config.sigmoid_threshold else 0 for one in row] for row in
                             predictions.detach().cpu().numpy().tolist()]
             answer_list.extend(compute_pred)  # multi-class
-        # return [str(x) for x in answer_list], [str(x) for x in labels]
+
         return answer_list, labels
 
     def evaluate_train_valid(self):
         # Evaluate model for train and valid set
         predictions, labels = self._evaluate(data_loader=self.data_loader['train'])
-        train_result = self._compute_metrics(labels=labels, preds=predictions, )
+        train_result = self.mymetrics.compute_metrics(labels=labels, preds=predictions, )
         valid_predictions, valid_labels = self._evaluate(data_loader=self.data_loader['valid_train'])
-        valid_result = self._compute_metrics(labels=valid_labels, preds=valid_predictions, )
+        valid_result = self.mymetrics.compute_metrics(labels=valid_labels, preds=valid_predictions, )
 
         return train_result, valid_result
 
@@ -182,12 +191,7 @@ class Trainer:
         """
         torch.save(self.model.state_dict(), filename)
 
-    def train(self, ReTrain: bool = False):
-        """Train model on train set and evaluate on train and valid set.
-
-        Returns:
-            state dict of the best model with highest valid f1 score
-        """
+    def _log_init(self):
         epoch_logger = get_csv_logger(
             os.path.join(self.config.log_path,
                          self.config.experiment_name + '-epoch.csv'),
@@ -201,13 +205,22 @@ class Trainer:
             title='step,loss',
             log_format='%(asctime)s - %(message)s')
 
+        return epoch_logger, step_logger
+
+    def train(self, ReTrain: bool = False):
+        """Train model on train set and evaluate on train and valid set.
+
+        Returns:
+            state dict of the best model with highest valid f1 score
+        """
+        epoch_logger, step_logger = self._log_init()
+
         if ReTrain:  # 读入最新模型
-            temporary = self.load_last_model(model=self.model,
-                                             model_path=os.path.join(self.config.model_path,
-                                                                     self.config.experiment_name,
-                                                                     self.config.model_type + '-last_model.bin'),
-                                             optimizer=self.optimizer,
-                                             multi_gpu=False)
+            temporary = self.load_last_model(
+                model=self.model,
+                model_path=os.path.join(self.config.model_path, self.config.experiment_name,
+                                        self.config.model_type + '-last_model.bin'),
+                optimizer=self.optimizer, multi_gpu=False)
             self.model, self.optimizer, start_epoch, self.best_f1 = temporary
 
             self.save_model(os.path.join(
@@ -221,6 +234,8 @@ class Trainer:
             self.steps_left = self.config.num_epoch * len(self.data_loader['train'])
             self.best_f1 = 0
             start_epoch = 0
+            self.viz.line([[float("inf"), 0., 0.]], [0], win='train',
+                          opts=dict(title=self.config.experiment_name, legend=['loss', 'train_f1', 'valid_f1']))
 
         self.model.to(self.device)
         if self.config.multi_gpu:
@@ -235,40 +250,22 @@ class Trainer:
         # start training.
         for epoch in range(start_epoch, self.config.num_epoch):
             self.model.train()
-            train_loss_sum = 0
             try:
                 with tqdm(self.data_loader['train'], desc='step: ', ascii=False, ncols=140, position=0) as tqdm_obj:
-                    for step, batch in enumerate(tqdm_obj):
-                        batch = tuple(t.to(self.device) for t in batch)
-                        logits, _ = self.model(*batch[:-1])  # the last one is label
-                        predictions = nn.Sigmoid()(logits)
-                        loss = self.criterion(predictions.float(), batch[-1].float())
-                        # loss = nn.BCEWithLogitsLoss()(predictions, true_labels.to(self.device).float())
+                    epoch_loss = self.run_epoch(tqdm_obj=tqdm_obj)
 
-                        train_loss_sum += loss.item()
-                        if self.config.gradient_accumulation_steps > 1:  # 多次叠加
-                            loss = loss / self.config.gradient_accumulation_steps
-
-                        loss.backward()
-                        if (step + 1) % self.config.gradient_accumulation_steps == 0:
-                            torch.nn.utils.clip_grad_norm_(
-                                self.model.parameters(), self.config.max_grad_norm)  # 梯度裁剪
-                            self.optimizer.step()
-                            self.scheduler.step()
-                            self.optimizer.zero_grad()
-                            step_logger.info(str(self.steps_left) + ', ' + str(loss.item()))
-
-                        tqdm_obj.update(1)
             except KeyboardInterrupt:
                 tqdm_obj.close()
                 raise
             tqdm_obj.close()
             progress_bar.update(1)
+
+            step_logger.info(str(epoch) + ', train mode: ' + self.config.train_mode + ', loss: ' + str(epoch_loss))
+
             train_result, valid_result = self._epoch_evaluate_update_description_log(
                 tqdm_obj=progress_bar, logger=epoch_logger, epoch=epoch + 1)
-            self.writer.add_scalar('train loss', train_loss_sum / len(self.data_loader['train']), epoch)
-            self.writer.add_scalar('train f1', train_result['f1'], epoch)
-            self.writer.add_scalar('valid f1', valid_result['f1'], epoch)
+            self.viz.line([[epoch_loss, train_result['f1'], valid_result['f1']]], [epoch], win='train',
+                          update='append')
             # 分别保存最新模型，最优模型
             torch.save({'model_state_dict': self.model.state_dict(),
                         'epoch': epoch + 1,
@@ -283,29 +280,38 @@ class Trainer:
                 best_model_state_dict = deepcopy(self.model.state_dict())
                 self.best_f1 = valid_result['f1']
 
-            self.earlystop(train_loss_sum / len(self.data_loader['train']), self.model)
+            self.earlystop(epoch_loss, self.model)
             if self.earlystop.early_stop:
                 epoch_logger.info("Early stop \n")
                 break
-        self.writer.close()
+        self.viz.save([self.config.experiment_name])
 
         return best_model_state_dict
 
-    def _compute_metrics(self, labels, preds):
-        precision, recall, f1_micro, _ = precision_recall_fscore_support(labels, preds, average='micro')
-        precision_macro, recall_macro, f1_macro, _ = precision_recall_fscore_support(labels, preds, average='macro')
-        acc = accuracy_score(labels, preds)
-        metrics = Metrics()
-        mcm = metrics.subclass_confusion_matrix(targetSrc=labels, predSrc=preds)
-        return {
-            'accuracy': acc,
-            'precision': precision,
-            'recall': recall,
-            'f1_micro': f1_micro,
-            'f1_macro': f1_macro,
-            'f1': (f1_micro + f1_macro) / 2,
-            'subclass_confusion_matrix': mcm,
-        }
+    def run_epoch(self, tqdm_obj):
+        train_loss_sum = 0
+        for step, batch in enumerate(tqdm_obj):
+            batch = tuple(t.to(self.device) for t in batch)
+            logits, _ = self.model(*batch[:-1])  # the last one is label
+            predictions = nn.Sigmoid()(logits)
+            loss = self.criterion(predictions.float(), batch[-1].float())
+            # loss = nn.BCEWithLogitsLoss()(predictions, true_labels.to(self.device).float())
+
+            train_loss_sum += loss.item()
+            if self.config.gradient_accumulation_steps > 1:  # 多次叠加
+                loss = loss / self.config.gradient_accumulation_steps
+
+            loss.backward()
+            if (step + 1) % self.config.gradient_accumulation_steps == 0:
+                torch.nn.utils.clip_grad_norm_(
+                    self.model.parameters(), self.config.max_grad_norm)  # 梯度裁剪
+                self.optimizer.step()
+                self.scheduler.step()
+                self.optimizer.zero_grad()
+
+            tqdm_obj.update(1)
+
+        return train_loss_sum / len(tqdm_obj)
 
     @staticmethod
     def load_last_model(model, model_path, optimizer,
